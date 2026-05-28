@@ -10,7 +10,7 @@ import NotFound from "./pages/NotFound.tsx";
 const queryClient = new QueryClient();
 
 const App = () => {
-  const basename = import.meta.env.MODE === "production" ? "/Synapsee/" : "/";
+  const basename = import.meta.env.MODE === "production" ? "/" : "/";
 
   return (
     <QueryClientProvider client={queryClient}>
