@@ -242,7 +242,7 @@ export const LoginScreen = () => {
     account === "pessoa"
       ? "seu.nome@aluno.modulo.edu.br"
       : account === "instituicao"
-        ? "contato@instituicao.edu.br"
+        ? "@prof.modulo.edu.br"
         : "ri@empresa.com.br";
 
   const showDomainNotice =
@@ -435,7 +435,7 @@ export const LoginScreen = () => {
         <p className="mt-auto pt-6 text-center text-[11px] text-text-faint">
           Ao continuar você concorda com os{" "}
           <span className="underline">Termos</span> e a{" "}
-          <span className="underline">Política de Privacidade</span> do Sinapse.
+          <span className="underline">Política de Privacidade</span> do Synapse.
         </p>
       </div>
     </div>
