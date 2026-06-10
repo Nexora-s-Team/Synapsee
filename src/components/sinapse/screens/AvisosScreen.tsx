@@ -1,10 +1,26 @@
 import { useState } from "react";
-import { Loader2, Pin, PinOff, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import {
+  Loader2,
+  Pin,
+  PinOff,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  BookOpen,
+  Calendar,
+  Pencil,
+  AlertCircle,
+} from "lucide-react";
 import { Avatar } from "../Avatar";
 import { TopBar } from "../TopBar";
 import { AnnouncementComposer } from "../AnnouncementComposer";
-import { useAnnouncements, categoryLabel, type AnnouncementCategory } from "@/hooks/useAnnouncements";
+import {
+  useAnnouncements,
+  categoryLabel,
+  type AnnouncementCategory,
+} from "@/hooks/useAnnouncements";
 import { timeAgo } from "@/lib/timeAgo";
+import { isProfessorModuloEmail } from "@/lib/authValidation";
 import type { User } from "@supabase/supabase-js";
 import type { SinapseRole } from "@/hooks/useAuth";
 
@@ -21,13 +37,57 @@ const filters: { id: "all" | AnnouncementCategory; label: string }[] = [
   { id: "aviso_geral", label: "Aviso geral" },
 ];
 
+const categoryIcons: Record<AnnouncementCategory, typeof BookOpen> = {
+  academico: BookOpen,
+  eventos: Calendar,
+  provas: Pencil,
+  aviso_geral: AlertCircle,
+};
+
+const categoryColors: Record<
+  AnnouncementCategory,
+  { bg: string; text: string; badge: string }
+> = {
+  academico: {
+    bg: "bg-blue-500/10",
+    text: "text-blue-600",
+    badge: "bg-blue-100 text-blue-800",
+  },
+  eventos: {
+    bg: "bg-purple-500/10",
+    text: "text-purple-600",
+    badge: "bg-purple-100 text-purple-800",
+  },
+  provas: {
+    bg: "bg-orange-500/10",
+    text: "text-orange-600",
+    badge: "bg-orange-100 text-orange-800",
+  },
+  aviso_geral: {
+    bg: "bg-red-500/10",
+    text: "text-red-600",
+    badge: "bg-red-100 text-red-800",
+  },
+};
+
 export const AvisosScreen = ({ user, role }: AvisosScreenProps) => {
   const { items, loading, create, remove, togglePin } = useAnnouncements(user);
   const [filter, setFilter] = useState<"all" | AnnouncementCategory>("all");
   const [composerOpen, setComposerOpen] = useState(false);
 
-  const canPost = role === "professor" || role === "admin";
-  const visible = filter === "all" ? items : items.filter((a) => a.category === filter);
+  console.log("AvisosScreen Auth Check:", {
+    role,
+    email: user?.email,
+    isProfEmail: user?.email ? isProfessorModuloEmail(user.email) : false,
+  });
+
+  const canPost =
+    (role === "professor" &&
+      !!user?.email &&
+      isProfessorModuloEmail(user.email)) ||
+    role === "admin";
+  const visible =
+    filter === "all" ? items : items.filter((a) => a.category === filter);
 
   return (
     <div className="flex flex-col">
@@ -89,7 +149,9 @@ export const AvisosScreen = ({ user, role }: AvisosScreenProps) => {
         </div>
       ) : visible.length === 0 ? (
         <div className="px-6 py-12 text-center">
-          <p className="font-display text-base font-semibold">Nenhum aviso por aqui</p>
+          <p className="font-display text-base font-semibold">
+            Nenhum aviso por aqui
+          </p>
           <p className="mt-1 text-sm text-text-faint">
             {canPost
               ? "Publique o primeiro aviso para os alunos."
@@ -119,16 +181,23 @@ export const AvisosScreen = ({ user, role }: AvisosScreenProps) => {
                   </span>
                 )}
                 <div className="flex items-center gap-2.5">
-                  <Avatar name={a.author.display_name} color="from-zinc-200 to-zinc-400" size="sm" />
+                  <Avatar
+                    name={a.author.display_name}
+                    color="from-zinc-200 to-zinc-400"
+                    size="sm"
+                  />
                   <div>
                     <div className="flex items-center gap-1.5">
-                      <p className="text-xs font-semibold">{a.author.display_name}</p>
+                      <p className="text-xs font-semibold">
+                        {a.author.display_name}
+                      </p>
                       <span className="grid h-3.5 w-3.5 place-items-center rounded-full bg-foreground text-background">
                         <ShieldCheck className="h-2.5 w-2.5" />
                       </span>
                     </div>
                     <p className="text-[10px] text-text-faint">
-                      {a.author.department ?? "Faculdade Módulo"} · {timeAgo(a.created_at)}
+                      {a.author.department ?? "Faculdade Módulo"} ·{" "}
+                      {timeAgo(a.created_at)}
                     </p>
                   </div>
                 </div>
@@ -137,8 +206,12 @@ export const AvisosScreen = ({ user, role }: AvisosScreenProps) => {
                   <span className="inline-block rounded-md bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-text-subtle">
                     {categoryLabel[a.category]}
                   </span>
-                  <h3 className="mt-2 font-display text-base font-semibold leading-snug">{a.title}</h3>
-                  <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-text-subtle">{a.body}</p>
+                  <h3 className="mt-2 font-display text-base font-semibold leading-snug">
+                    {a.title}
+                  </h3>
+                  <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-text-subtle">
+                    {a.body}
+                  </p>
                 </div>
 
                 {isMine && canPost && (
@@ -147,7 +220,11 @@ export const AvisosScreen = ({ user, role }: AvisosScreenProps) => {
                       onClick={() => togglePin(a)}
                       className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1.5 text-[11px] font-medium text-text-subtle hover:bg-accent"
                     >
-                      {a.pinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
+                      {a.pinned ? (
+                        <PinOff className="h-3 w-3" />
+                      ) : (
+                        <Pin className="h-3 w-3" />
+                      )}
                       {a.pinned ? "Desafixar" : "Fixar"}
                     </button>
                     <button
@@ -165,7 +242,10 @@ export const AvisosScreen = ({ user, role }: AvisosScreenProps) => {
       )}
 
       {composerOpen && canPost && (
-        <AnnouncementComposer onSubmit={create} onClose={() => setComposerOpen(false)} />
+        <AnnouncementComposer
+          onSubmit={create}
+          onClose={() => setComposerOpen(false)}
+        />
       )}
     </div>
   );

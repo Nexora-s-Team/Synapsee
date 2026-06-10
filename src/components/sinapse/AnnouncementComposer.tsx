@@ -1,7 +1,18 @@
 import { useState } from "react";
-import { Loader2, Pin, X } from "lucide-react";
+import {
+  Loader2,
+  Pin,
+  X,
+  BookOpen,
+  Calendar,
+  Pencil,
+  AlertCircle,
+} from "lucide-react";
 import { toast } from "sonner";
-import { categoryLabel, type AnnouncementCategory } from "@/hooks/useAnnouncements";
+import {
+  categoryLabel,
+  type AnnouncementCategory,
+} from "@/hooks/useAnnouncements";
 
 interface AnnouncementComposerProps {
   onSubmit: (input: {
@@ -13,9 +24,31 @@ interface AnnouncementComposerProps {
   onClose: () => void;
 }
 
-const categories: AnnouncementCategory[] = ["academico", "eventos", "provas", "aviso_geral"];
+const categories: AnnouncementCategory[] = [
+  "academico",
+  "eventos",
+  "provas",
+  "aviso_geral",
+];
 
-export const AnnouncementComposer = ({ onSubmit, onClose }: AnnouncementComposerProps) => {
+const categoryIcons: Record<AnnouncementCategory, typeof BookOpen> = {
+  academico: BookOpen,
+  eventos: Calendar,
+  provas: Pencil,
+  aviso_geral: AlertCircle,
+};
+
+const categoryDescriptions: Record<AnnouncementCategory, string> = {
+  academico: "Conteúdo acadêmico, material de aula, recursos de estudo",
+  eventos: "Eventos, palestras, encontros, atividades extracurriculares",
+  provas: "Provas, avaliações, datas de submissão, critérios de avaliação",
+  aviso_geral: "Avisos gerais, comunicados importantes, alterações de horário",
+};
+
+export const AnnouncementComposer = ({
+  onSubmit,
+  onClose,
+}: AnnouncementComposerProps) => {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [category, setCategory] = useState<AnnouncementCategory>("aviso_geral");
@@ -53,7 +86,12 @@ export const AnnouncementComposer = ({ onSubmit, onClose }: AnnouncementComposer
       >
         <header className="flex items-center justify-between">
           <h3 className="font-display text-base font-semibold">Novo aviso</h3>
-          <button type="button" onClick={onClose} className="rounded-full p-1.5 hover:bg-secondary" aria-label="Fechar">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-1.5 hover:bg-secondary"
+            aria-label="Fechar"
+          >
             <X className="h-5 w-5" />
           </button>
         </header>
@@ -76,21 +114,40 @@ export const AnnouncementComposer = ({ onSubmit, onClose }: AnnouncementComposer
         />
 
         <div>
-          <p className="mb-1.5 text-[11px] uppercase tracking-wider text-text-faint">Categoria</p>
-          <div className="flex flex-wrap gap-1.5">
-            {categories.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setCategory(c)}
-                className={
-                  "rounded-full px-3 py-1.5 text-xs font-medium transition-smooth " +
-                  (category === c ? "bg-foreground text-background" : "bg-secondary text-text-subtle hover:bg-accent")
-                }
-              >
-                {categoryLabel[c]}
-              </button>
-            ))}
+          <p className="mb-2 text-[11px] uppercase tracking-wider text-text-faint">
+            Selecione a Categoria
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {categories.map((c) => {
+              const Icon = categoryIcons[c];
+              const isSelected = category === c;
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCategory(c)}
+                  className={`flex flex-col items-start gap-1.5 rounded-xl border transition-smooth p-2.5 ${
+                    isSelected
+                      ? "border-foreground bg-foreground/10 shadow-md"
+                      : "border-hairline bg-surface-elevated hover:border-foreground/50 hover:bg-accent"
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Icon
+                      className={`h-4 w-4 ${isSelected ? "text-foreground" : "text-text-subtle"}`}
+                    />
+                    <span
+                      className={`text-xs font-semibold ${isSelected ? "text-foreground" : "text-text-subtle"}`}
+                    >
+                      {categoryLabel[c]}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-text-faint leading-tight">
+                    {categoryDescriptions[c]}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -108,7 +165,9 @@ export const AnnouncementComposer = ({ onSubmit, onClose }: AnnouncementComposer
         </label>
 
         <div className="flex items-center justify-between">
-          <span className="text-[11px] text-text-faint">{body.length}/4000</span>
+          <span className="text-[11px] text-text-faint">
+            {body.length}/4000
+          </span>
           <button
             type="submit"
             disabled={sending}
