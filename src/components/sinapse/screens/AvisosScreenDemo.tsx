@@ -3,12 +3,12 @@ import { Avatar } from "../Avatar";
 import { TopBar } from "../TopBar";
 import { announcements } from "@/lib/mockData";
 
-const filters = ["Tudo", "Acadêmico", "Eventos", "Provas", "Aviso geral"];
+const filters = ["Tudo", "Academico", "Eventos", "Provas", "Aviso geral"];
 
 export const AvisosScreenDemo = () => {
   return (
     <div className="flex flex-col">
-      <TopBar showLogo={false} title="Avisos & Notícias" />
+      <TopBar showLogo={false} title="Avisos & Noticias" />
 
       <div className="mx-4 mt-4 rounded-xl border border-hairline bg-surface-elevated p-3">
         <div className="flex items-center gap-2.5">
@@ -17,7 +17,10 @@ export const AvisosScreenDemo = () => {
           </div>
           <div className="flex-1">
             <p className="text-xs font-semibold">Canal oficial da Faculdade</p>
-            <p className="text-[11px] text-text-faint">Apenas professores e direção podem publicar.</p>
+            <p className="text-[11px] text-text-faint">
+              Somente professores com e-mail @prof.modulo.edu.br podem
+              publicar.
+            </p>
           </div>
         </div>
       </div>
@@ -28,7 +31,9 @@ export const AvisosScreenDemo = () => {
             key={c}
             className={
               "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium " +
-              (i === 0 ? "bg-foreground text-background" : "bg-secondary text-text-subtle")
+              (i === 0
+                ? "bg-foreground text-background"
+                : "bg-secondary text-text-subtle")
             }
           >
             {c}
@@ -48,7 +53,11 @@ export const AvisosScreenDemo = () => {
               </span>
             )}
             <div className="flex items-center gap-2.5">
-              <Avatar name={a.author} color="from-zinc-200 to-zinc-400" size="sm" />
+              <Avatar
+                name={a.author}
+                color="from-zinc-200 to-zinc-400"
+                size="sm"
+              />
               <div>
                 <div className="flex items-center gap-1.5">
                   <p className="text-xs font-semibold">{a.author}</p>
@@ -56,7 +65,9 @@ export const AvisosScreenDemo = () => {
                     <ShieldCheck className="h-2.5 w-2.5" />
                   </span>
                 </div>
-                <p className="text-[10px] text-text-faint">{a.department} · {a.timeAgo}</p>
+                <p className="text-[10px] text-text-faint">
+                  {a.department} · {a.timeAgo}
+                </p>
               </div>
             </div>
 
@@ -64,8 +75,12 @@ export const AvisosScreenDemo = () => {
               <span className="inline-block rounded-md bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-text-subtle">
                 {a.tag}
               </span>
-              <h3 className="mt-2 font-display text-base font-semibold leading-snug">{a.title}</h3>
-              <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-text-subtle">{a.body}</p>
+              <h3 className="mt-2 font-display text-base font-semibold leading-snug">
+                {a.title}
+              </h3>
+              <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-text-subtle">
+                {a.body}
+              </p>
             </div>
           </article>
         ))}

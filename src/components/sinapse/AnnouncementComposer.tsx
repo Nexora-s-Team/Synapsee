@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import {
   Loader2,
   Pin,
@@ -39,10 +39,10 @@ const categoryIcons: Record<AnnouncementCategory, typeof BookOpen> = {
 };
 
 const categoryDescriptions: Record<AnnouncementCategory, string> = {
-  academico: "Conteúdo acadêmico, material de aula, recursos de estudo",
+  academico: "Conteudo academico, material de aula, recursos de estudo",
   eventos: "Eventos, palestras, encontros, atividades extracurriculares",
-  provas: "Provas, avaliações, datas de submissão, critérios de avaliação",
-  aviso_geral: "Avisos gerais, comunicados importantes, alterações de horário",
+  provas: "Provas, avaliacoes, datas de submissao, criterios de avaliacao",
+  aviso_geral: "Avisos gerais, comunicados importantes, alteracoes de horario",
 };
 
 export const AnnouncementComposer = ({
@@ -55,27 +55,30 @@ export const AnnouncementComposer = ({
   const [pinned, setPinned] = useState(false);
   const [sending, setSending] = useState(false);
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     const t = title.trim();
     const b = body.trim();
     if (t.length < 3) {
-      toast.error("Título muito curto");
+      toast.error("Titulo muito curto");
       return;
     }
     if (b.length < 3) {
-      toast.error("Conteúdo muito curto");
+      toast.error("Conteudo muito curto");
       return;
     }
+
     setSending(true);
     const res = await onSubmit({ title: t, body: b, category, pinned });
     setSending(false);
+
     if (res?.error) {
       toast.error(res.error);
-    } else {
-      toast.success("Aviso publicado!");
-      onClose();
+      return;
     }
+
+    toast.success("Comunicado publicado!");
+    onClose();
   };
 
   return (
@@ -85,7 +88,9 @@ export const AnnouncementComposer = ({
         className="mx-auto mt-12 flex w-full max-w-[440px] flex-col gap-3 rounded-3xl border border-hairline bg-surface-overlay p-4 shadow-glow"
       >
         <header className="flex items-center justify-between">
-          <h3 className="font-display text-base font-semibold">Novo aviso</h3>
+          <h3 className="font-display text-base font-semibold">
+            Novo comunicado
+          </h3>
           <button
             type="button"
             onClick={onClose}
@@ -99,7 +104,7 @@ export const AnnouncementComposer = ({
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Título do aviso"
+          placeholder="Titulo do comunicado"
           maxLength={140}
           className="w-full rounded-xl border border-hairline bg-surface-elevated px-3.5 py-3 text-sm font-semibold placeholder:text-text-faint focus:border-foreground/60 focus:outline-none"
         />
@@ -107,7 +112,7 @@ export const AnnouncementComposer = ({
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          placeholder="Detalhes do aviso para os alunos…"
+          placeholder="Detalhes do comunicado para os alunos..."
           rows={5}
           maxLength={4000}
           className="w-full resize-none rounded-xl border border-hairline bg-surface-elevated px-3.5 py-3 text-sm placeholder:text-text-faint focus:border-foreground/60 focus:outline-none"
@@ -115,7 +120,7 @@ export const AnnouncementComposer = ({
 
         <div>
           <p className="mb-2 text-[11px] uppercase tracking-wider text-text-faint">
-            Selecione a Categoria
+            Selecione a categoria
           </p>
           <div className="grid grid-cols-2 gap-2">
             {categories.map((c) => {
@@ -142,7 +147,7 @@ export const AnnouncementComposer = ({
                       {categoryLabel[c]}
                     </span>
                   </div>
-                  <span className="text-[10px] text-text-faint leading-tight">
+                  <span className="text-[10px] leading-tight text-text-faint">
                     {categoryDescriptions[c]}
                   </span>
                 </button>
@@ -165,16 +170,14 @@ export const AnnouncementComposer = ({
         </label>
 
         <div className="flex items-center justify-between">
-          <span className="text-[11px] text-text-faint">
-            {body.length}/4000
-          </span>
+          <span className="text-[11px] text-text-faint">{body.length}/4000</span>
           <button
             type="submit"
             disabled={sending}
             className="flex items-center gap-1.5 rounded-full bg-foreground px-5 py-2 text-xs font-semibold text-background disabled:opacity-50"
           >
             {sending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            Publicar aviso
+            Publicar comunicado
           </button>
         </div>
       </form>

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 // Aceita qualquer e-mail @modulo.edu.br ou subdomínio (@aluno., @prof., @cs., @eng., etc.)
 const MODULO_DOMAIN_REGEX = /@([a-z0-9-]+\.)*modulo\.edu\.br$/i;
-const PROFESSOR_DOMAIN_REGEX = /@([a-z0-9-]+\.)*prof\.modulo\.edu\.br$/i;
+const PROFESSOR_DOMAIN_REGEX = /@prof\.modulo\.edu\.br$/i;
 
 const PUBLIC_EMAIL_PROVIDERS = new Set([
   "gmail.com",

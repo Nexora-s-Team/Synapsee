@@ -70,22 +70,12 @@ const categoryColors: Record<
   },
 };
 
-export const AvisosScreen = ({ user, role }: AvisosScreenProps) => {
+export const AvisosScreen = ({ user }: AvisosScreenProps) => {
   const { items, loading, create, remove, togglePin } = useAnnouncements(user);
   const [filter, setFilter] = useState<"all" | AnnouncementCategory>("all");
   const [composerOpen, setComposerOpen] = useState(false);
 
-  console.log("AvisosScreen Auth Check:", {
-    role,
-    email: user?.email,
-    isProfEmail: user?.email ? isProfessorModuloEmail(user.email) : false,
-  });
-
-  const canPost =
-    (role === "professor" &&
-      !!user?.email &&
-      isProfessorModuloEmail(user.email)) ||
-    role === "admin";
+  const canPost = !!user?.email && isProfessorModuloEmail(user.email);
   const visible =
     filter === "all" ? items : items.filter((a) => a.category === filter);
 
@@ -99,7 +89,7 @@ export const AvisosScreen = ({ user, role }: AvisosScreenProps) => {
             <button
               onClick={() => setComposerOpen(true)}
               className="rounded-full p-2 transition-smooth hover:bg-secondary"
-              aria-label="Novo aviso"
+              aria-label="Novo comunicado"
             >
               <Plus className="h-5 w-5" />
             </button>
@@ -107,7 +97,6 @@ export const AvisosScreen = ({ user, role }: AvisosScreenProps) => {
         }
       />
 
-      {/* Banner — quem pode postar */}
       <div className="mx-4 mt-4 rounded-xl border border-hairline bg-surface-elevated p-3">
         <div className="flex items-center gap-2.5">
           <div className="grid h-9 w-9 place-items-center rounded-full bg-foreground text-background">
@@ -117,14 +106,13 @@ export const AvisosScreen = ({ user, role }: AvisosScreenProps) => {
             <p className="text-xs font-semibold">Canal oficial da Faculdade</p>
             <p className="text-[11px] text-text-faint">
               {canPost
-                ? "Você pode publicar avisos para todos os alunos."
-                : "Apenas professores e direção podem publicar."}
+                ? "Você pode publicar avisos, eventos e provas para os alunos."
+                : "Somente professores com e-mail @prof.modulo.edu.br podem publicar."}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Filtros */}
       <div className="flex gap-2 overflow-x-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {filters.map((c) => (
           <button
@@ -142,7 +130,6 @@ export const AvisosScreen = ({ user, role }: AvisosScreenProps) => {
         ))}
       </div>
 
-      {/* Lista */}
       {loading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="h-5 w-5 animate-spin text-text-faint" />
@@ -154,7 +141,7 @@ export const AvisosScreen = ({ user, role }: AvisosScreenProps) => {
           </p>
           <p className="mt-1 text-sm text-text-faint">
             {canPost
-              ? "Publique o primeiro aviso para os alunos."
+              ? "Publique o primeiro comunicado para os alunos."
               : "Quando houver avisos da faculdade, eles aparecerão aqui."}
           </p>
           {canPost && (
@@ -162,14 +149,17 @@ export const AvisosScreen = ({ user, role }: AvisosScreenProps) => {
               onClick={() => setComposerOpen(true)}
               className="mt-4 rounded-full bg-foreground px-5 py-2 text-sm font-semibold text-background"
             >
-              Criar aviso
+              Criar comunicado
             </button>
           )}
         </div>
       ) : (
         <section className="space-y-3 px-4 pb-2">
           {visible.map((a) => {
-            const isMine = user?.id === a.user_id;
+            const authorEmail = a.author.email?.toLowerCase() ?? null;
+            const currentEmail = user?.email?.toLowerCase() ?? null;
+            const isMine = user?.id === a.user_id || currentEmail === authorEmail;
+
             return (
               <article
                 key={a.id}
@@ -180,6 +170,7 @@ export const AvisosScreen = ({ user, role }: AvisosScreenProps) => {
                     <Pin className="h-3 w-3" /> Fixado
                   </span>
                 )}
+
                 <div className="flex items-center gap-2.5">
                   <Avatar
                     name={a.author.display_name}

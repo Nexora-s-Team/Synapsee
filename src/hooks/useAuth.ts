@@ -12,7 +12,7 @@ export interface SinapseProfile {
   semester: string | null;
   bio: string | null;
   avatar_url: string | null;
-  last_username_change: string | null;
+  last_username_change?: string | null;
 }
 
 export type SinapseRole =
@@ -127,8 +127,7 @@ export const useAuth = () => {
           ? "instituicao"
           : accountType === "empresa"
             ? "empresa"
-            : email.endsWith("@prof.modulo.edu.br") ||
-                email.endsWith("@modulo.edu.br")
+            : email.endsWith("@prof.modulo.edu.br")
               ? "professor"
               : "aluno";
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isProfessorModuloEmail } from "@/lib/authValidation";
 import type { User } from "@supabase/supabase-js";
 
 export type AnnouncementCategory = "academico" | "eventos" | "provas" | "aviso_geral";
@@ -19,7 +20,11 @@ export interface Announcement {
   category: AnnouncementCategory;
   pinned: boolean;
   created_at: string;
-  author: { display_name: string; department: string | null };
+  author: {
+    display_name: string;
+    department: string | null;
+    email: string | null;
+  };
 }
 
 export const useAnnouncements = (currentUser: User | null) => {
@@ -43,7 +48,7 @@ export const useAnnouncements = (currentUser: User | null) => {
     const ids = Array.from(new Set(rows.map((r) => r.user_id)));
     const { data: profs } = await supabase
       .from("profiles")
-      .select("user_id, display_name, course")
+      .select("user_id, display_name, course, email")
       .in("user_id", ids);
     const map = new Map((profs ?? []).map((p) => [p.user_id, p]));
     setItems(
@@ -52,6 +57,7 @@ export const useAnnouncements = (currentUser: User | null) => {
         author: {
           display_name: map.get(r.user_id)?.display_name ?? "Professor(a)",
           department: map.get(r.user_id)?.course ?? null,
+          email: map.get(r.user_id)?.email ?? null,
         },
       })),
     );
@@ -76,6 +82,9 @@ export const useAnnouncements = (currentUser: User | null) => {
     pinned: boolean;
   }) => {
     if (!currentUser) return { error: "Não autenticado" };
+    if (!currentUser.email || !isProfessorModuloEmail(currentUser.email)) {
+      return { error: "Somente professores com e-mail @prof.modulo.edu.br podem publicar." };
+    }
     const { error } = await supabase.from("announcements").insert({
       user_id: currentUser.id,
       ...input,
@@ -85,11 +94,17 @@ export const useAnnouncements = (currentUser: User | null) => {
   };
 
   const remove = async (id: string) => {
+    if (!currentUser?.email || !isProfessorModuloEmail(currentUser.email)) {
+      return;
+    }
     await supabase.from("announcements").delete().eq("id", id);
     await load();
   };
 
   const togglePin = async (a: Announcement) => {
+    if (!currentUser?.email || !isProfessorModuloEmail(currentUser.email)) {
+      return;
+    }
     await supabase.from("announcements").update({ pinned: !a.pinned }).eq("id", a.id);
     await load();
   };
