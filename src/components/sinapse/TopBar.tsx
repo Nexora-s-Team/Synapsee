@@ -1,18 +1,40 @@
-import { Bell, Heart, MessageCircle, Search } from "lucide-react";
+import { Bell, Heart, MessageCircle, Search, ChevronLeft } from "lucide-react";
 import { SinapseLogo } from "./SinapseLogo";
 
 interface TopBarProps {
   title?: string;
   showLogo?: boolean;
   showSearch?: boolean;
+  searchQuery?: string;
+  onSearchChange?: (val: string) => void;
   rightSlot?: React.ReactNode;
+  onBack?: () => void;
 }
 
-export const TopBar = ({ title, showLogo = true, showSearch = false, rightSlot }: TopBarProps) => {
+export const TopBar = ({
+  title,
+  showLogo = true,
+  showSearch = false,
+  searchQuery = "",
+  onSearchChange,
+  rightSlot,
+  onBack,
+}: TopBarProps) => {
   return (
     <header className="sticky top-0 z-30 border-b border-hairline bg-background/85 backdrop-blur-xl">
       <div className="flex h-14 items-center justify-between px-4">
-        {showLogo ? <SinapseLogo /> : <h1 className="font-display text-lg font-semibold">{title}</h1>}
+        <div className="flex items-center gap-2">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="mr-1 rounded-full p-1.5 transition-smooth hover:bg-secondary"
+              aria-label="Voltar"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+          )}
+          {showLogo ? <SinapseLogo /> : <h1 className="font-display text-lg font-semibold">{title}</h1>}
+        </div>
         <div className="flex items-center gap-1">
           {rightSlot ?? (
             <>
@@ -31,7 +53,9 @@ export const TopBar = ({ title, showLogo = true, showSearch = false, rightSlot }
           <div className="flex items-center gap-2 rounded-xl bg-muted px-3 py-2">
             <Search className="h-4 w-4 text-text-faint" />
             <input
-              placeholder="Buscar pessoas, vagas, avisos..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange?.(e.target.value)}
+              placeholder="Buscar pessoas..."
               className="w-full bg-transparent text-sm placeholder:text-text-faint focus:outline-none"
             />
           </div>

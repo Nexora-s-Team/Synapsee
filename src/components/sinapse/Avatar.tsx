@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 
 interface AvatarProps {
   name: string;
+  url?: string | null;
   color?: string;
   size?: "xs" | "sm" | "md" | "lg" | "xl";
   ring?: boolean;
@@ -16,7 +17,14 @@ const sizeMap = {
   xl: "h-24 w-24 text-2xl",
 };
 
-export const Avatar = ({ name, color = "from-zinc-300 to-zinc-500", size = "md", ring, className }: AvatarProps) => {
+export const Avatar = ({
+  name,
+  url,
+  color = "from-zinc-300 to-zinc-500",
+  size = "md",
+  ring,
+  className,
+}: AvatarProps) => {
   const initials = name
     .split(" ")
     .map((n) => n[0])
@@ -27,14 +35,18 @@ export const Avatar = ({ name, color = "from-zinc-300 to-zinc-500", size = "md",
   return (
     <div
       className={cn(
-        "relative inline-flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br font-semibold text-zinc-900 shadow-soft",
+        "relative inline-flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br font-semibold text-zinc-900 shadow-soft overflow-hidden",
         color,
         sizeMap[size],
         ring && "ring-2 ring-foreground/80 ring-offset-2 ring-offset-background",
         className,
       )}
     >
-      {initials}
+      {url ? (
+        <img src={url} alt={name} className="h-full w-full object-cover" />
+      ) : (
+        initials
+      )}
     </div>
   );
 };

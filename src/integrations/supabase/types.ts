@@ -47,6 +47,44 @@ export type Database = {
         };
         Relationships: [];
       };
+      notifications: {
+        Row: {
+          actor_id: string;
+          created_at: string;
+          id: string;
+          post_id: string | null;
+          read: boolean;
+          type: string;
+          user_id: string;
+        };
+        Insert: {
+          actor_id: string;
+          created_at?: string;
+          id?: string;
+          post_id?: string | null;
+          read?: boolean;
+          type: string;
+          user_id: string;
+        };
+        Update: {
+          actor_id?: string;
+          created_at?: string;
+          id?: string;
+          post_id?: string | null;
+          read?: boolean;
+          type?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notifications_post_id_fkey";
+            columns: ["post_id"];
+            isOneToOne: false;
+            referencedRelation: "posts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       post_comments: {
         Row: {
           content: string;
@@ -215,6 +253,56 @@ export type Database = {
           user_id?: string;
         };
         Relationships: [];
+      };
+      user_follows: {
+        Row: {
+          id: string;
+          follower_id: string;
+          following_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          follower_id: string;
+          following_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          follower_id?: string;
+          following_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      post_saves: {
+        Row: {
+          id: string;
+          post_id: string;
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          post_id: string;
+          user_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          post_id?: string;
+          user_id?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "post_saves_post_id_fkey";
+            columns: ["post_id"];
+            isOneToOne: false;
+            referencedRelation: "posts";
+            referencedColumns: ["id"];
+          }
+        ];
       };
     };
     Views: {

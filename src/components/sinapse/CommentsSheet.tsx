@@ -17,12 +17,14 @@ interface CommentsSheetProps {
   postId: string | null;
   currentUser: User | null;
   onClose: () => void;
+  onViewProfile?: (userId: string) => void;
 }
 
 export const CommentsSheet = ({
   postId,
   currentUser,
   onClose,
+  onViewProfile,
 }: CommentsSheetProps) => {
   const { comments, loading, add, remove } = useComments(postId, currentUser);
   const [value, setValue] = useState("");
@@ -87,10 +89,18 @@ export const CommentsSheet = ({
             <ul className="space-y-4">
               {comments.map((c) => (
                 <li key={c.id} className="flex gap-3">
-                  <Avatar name={c.author.display_name} size="sm" />
+                  <div
+                    className="cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={() => onViewProfile?.(c.user_id)}
+                  >
+                    <Avatar name={c.author.display_name} size="sm" />
+                  </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex min-w-0 items-baseline gap-2">
+                      <div
+                        className="flex min-w-0 items-baseline gap-2 cursor-pointer hover:opacity-85 transition-opacity"
+                        onClick={() => onViewProfile?.(c.user_id)}
+                      >
                         <p className="truncate text-xs font-semibold">
                           {c.author.display_name}
                         </p>

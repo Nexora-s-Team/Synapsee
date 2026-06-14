@@ -20,7 +20,7 @@ export const FeedScreenDemo = () => {
         }
       />
 
-      {/* Stories */}
+      {/* Stories 
       <section className="border-b border-hairline">
         <div className="flex gap-4 overflow-x-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {stories.map((s) => (
@@ -41,7 +41,7 @@ export const FeedScreenDemo = () => {
             </div>
           ))}
         </div>
-      </section>
+      </section>*/}
 
       {/* Composer inline */}
       <div className="flex items-center gap-3 border-b border-hairline px-4 py-3 text-left">

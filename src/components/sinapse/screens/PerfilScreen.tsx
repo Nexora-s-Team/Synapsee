@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BookOpen,
+  Camera,
   ChevronRight,
   GraduationCap,
   KeyRound,
@@ -10,10 +11,18 @@ import {
   Settings,
   ShieldCheck,
   Trash2,
+  ChevronLeft,
+  Heart,
+  MessageCircle,
+  Bookmark,
+  MoreHorizontal,
+  Loader2,
+  Send,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar } from "../Avatar";
 import { TopBar } from "../TopBar";
+import { CommentsSheet } from "../CommentsSheet";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +40,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import type { SinapseProfile, SinapseRole } from "@/hooks/useAuth";
+import { usePosts, FeedPost } from "@/hooks/usePosts";
+import { timeAgo } from "@/lib/timeAgo";
+import { cn } from "@/lib/utils";
+import type { User } from "@supabase/supabase-js";
 
 const isRateLimitError = (message: string) => {
   const text = message.toLowerCase();
@@ -43,6 +56,10 @@ interface PerfilScreenProps {
   profile: SinapseProfile | null;
   role: SinapseRole | null;
   emailVerified: boolean;
+  targetUserId?: string | null;
+  onBack?: () => void;
+  currentUser?: User | null;
+  onViewProfile?: (userId: string) => void;
 }
 
 const roleLabel: Record<SinapseRole, string> = {
@@ -59,6 +76,10 @@ export const PerfilScreen = ({
   profile,
   role,
   emailVerified,
+  targetUserId,
+  onBack,
+  currentUser,
+  onViewProfile,
 }: PerfilScreenProps) => {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -86,29 +107,334 @@ export const PerfilScreen = ({
     null,
   );
 
-  useEffect(() => {
-    if (!profile) return;
-    setProfileName(profile.display_name);
-    setDraftName(profile.display_name);
-    setProfileUsername(profile.handle ?? profile.email.split("@")[0] ?? "");
-    setDraftUsername(profile.handle ?? profile.email.split("@")[0] ?? "");
-    setProfileCourse(profile.course ?? "");
-    setDraftCourse(profile.course ?? "");
-    setProfileSemester(profile.semester ?? "");
-    setDraftSemester(profile.semester ?? "");
-    setDraftEmailLocal(profile.email.split("@")[0] ?? "");
-    setLastUsernameChange(profile.last_username_change ?? null);
-  }, [profile]);
+  // Avatar
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
-  if (!profile) {
+  // Dynamic Profile and Stats states
+  const [targetProfile, setTargetProfile] = useState<SinapseProfile | null>(null);
+  const [targetRole, setTargetRole] = useState<SinapseRole | null>(null);
+  const [stats, setStats] = useState({ posts: 0, followers: 0, following: 0 });
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+
+  // Active Tab
+  const [activeTab, setActiveTab] = useState<"posts" | "saved" | "vagas">("posts");
+
+  // Comments & Post Actions
+  const [openComments, setOpenComments] = useState<string | null>(null);
+  const [openPostMenu, setOpenPostMenu] = useState<string | null>(null);
+
+  // Saved posts state
+  const [savedPosts, setSavedPosts] = useState<FeedPost[]>([]);
+  const [savedLoading, setSavedLoading] = useState(false);
+
+  const isOwnProfile = !targetUserId || targetUserId === profile?.user_id;
+  const displayProfile = isOwnProfile ? profile : targetProfile;
+  const displayRole = isOwnProfile ? role : targetRole;
+
+  const {
+    posts,
+    loading: loadingPosts,
+    toggleLike: toggleLikePost,
+    toggleSave: toggleSavePost,
+    remove: removePost,
+  } = usePosts(currentUser, targetUserId || profile?.user_id);
+
+  const loadProfileStats = async (uid: string) => {
+    try {
+      const [postsRes, followersRes, followingRes] = await Promise.all([
+        supabase
+          .from("posts")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", uid),
+        supabase
+          .from("user_follows")
+          .select("id", { count: "exact", head: true })
+          .eq("following_id", uid),
+        supabase
+          .from("user_follows")
+          .select("id", { count: "exact", head: true })
+          .eq("follower_id", uid),
+      ]);
+
+      setStats({
+        posts: postsRes.count ?? 0,
+        followers: followersRes.count ?? 0,
+        following: followingRes.count ?? 0,
+      });
+    } catch (err) {
+      console.error("Error loading stats", err);
+    }
+  };
+
+  const checkFollowStatus = async (followerId: string, followingId: string) => {
+    if (followerId === followingId) return;
+    const { data } = await supabase
+      .from("user_follows")
+      .select("id")
+      .eq("follower_id", followerId)
+      .eq("following_id", followingId)
+      .maybeSingle();
+    setIsFollowing(!!data);
+  };
+
+  const loadSavedPosts = async () => {
+    if (!profile?.user_id) return;
+    setSavedLoading(true);
+
+    const { data: rawSaves, error } = await supabase
+      .from("post_saves")
+      .select(`
+        post_id,
+        posts (
+          id,
+          user_id,
+          content,
+          media_url,
+          media_type,
+          likes_count,
+          comments_count,
+          created_at
+        )
+      `)
+      .eq("user_id", profile.user_id)
+      .order("created_at", { ascending: false });
+
+    if (error || !rawSaves) {
+      setSavedPosts([]);
+      setSavedLoading(false);
+      return;
+    }
+
+    const postsList = rawSaves
+      .map((s) => s.posts)
+      .filter((p): p is NonNullable<typeof p> => p !== null);
+
+    if (postsList.length === 0) {
+      setSavedPosts([]);
+      setSavedLoading(false);
+      return;
+    }
+
+    const authorIds = Array.from(new Set(postsList.map((p) => p.user_id)));
+    const [{ data: authorProfiles }, { data: authorRoles }, { data: myLikes }] =
+  await Promise.all([
+    supabase
+      .from("profiles")
+      .select(
+        "user_id, display_name, handle, avatar_url, course, semester"
+      )
+      .in("user_id", authorIds),
+
+    supabase
+      .from("user_roles")
+      .select("user_id, role")
+      .in("user_id", authorIds),
+
+    supabase
+      .from("post_likes")
+      .select("post_id")
+      .eq("user_id", profile.user_id)
+      .in(
+        "post_id",
+        postsList.map((p) => p.id)
+      ),
+  ]);
+
+const profileMap = new Map(
+  (authorProfiles ?? []).map((p) => [p.user_id, p])
+);
+
+const roleMap = new Map(
+  (authorRoles ?? []).map((r) => [r.user_id, r.role])
+);
+
+const likedSet = new Set(
+  (myLikes ?? []).map((l) => l.post_id)
+);
+
+const formatted: FeedPost[] = postsList.map((p) => {
+  const prof = profileMap.get(p.user_id);
+
+  return {
+    id: p.id,
+    user_id: p.user_id,
+    content: p.content,
+    media_url: p.media_url,
+    media_type: p.media_type,
+    likes_count: p.likes_count,
+    comments_count: p.comments_count,
+    created_at: p.created_at,
+
+    author: {
+      display_name: prof?.display_name ?? "Usuário",
+      handle: prof?.handle ?? "user",
+      avatar_url: prof?.avatar_url ?? null,
+      course: prof?.course ?? null,
+      semester: prof?.semester ?? null,
+      role: (roleMap.get(p.user_id) as SinapseRole) ?? "aluno",
+    },
+
+    liked_by_me: likedSet.has(p.id),
+    saved_by_me: true,
+  };
+});
+
+setSavedPosts(formatted);
+    setSavedLoading(false);
+  };
+
+  const toggleLikeSavedPost = async (post: FeedPost) => {
+    if (!profile?.user_id) return;
+    setSavedPosts((prev) =>
+      prev.map((p) =>
+        p.id === post.id
+          ? {
+              ...p,
+              liked_by_me: !p.liked_by_me,
+              likes_count: p.likes_count + (p.liked_by_me ? -1 : 1),
+            }
+          : p,
+      ),
+    );
+    if (post.liked_by_me) {
+      await supabase
+        .from("post_likes")
+        .delete()
+        .eq("post_id", post.id)
+        .eq("user_id", profile.user_id);
+    } else {
+      await supabase
+        .from("post_likes")
+        .insert({ post_id: post.id, user_id: profile.user_id });
+    }
+  };
+
+  const toggleSaveSavedPost = async (post: FeedPost) => {
+    if (!profile?.user_id) return;
+    setSavedPosts((prev) => prev.filter((p) => p.id !== post.id));
+    await supabase
+      .from("post_saves")
+      .delete()
+      .eq("post_id", post.id)
+      .eq("user_id", profile.user_id);
+  };
+
+  const toggleFollow = async () => {
+    if (!profile?.user_id || !targetUserId) return;
+    setFollowLoading(true);
+    if (isFollowing) {
+      const { error } = await supabase
+        .from("user_follows")
+        .delete()
+        .eq("follower_id", profile.user_id)
+        .eq("following_id", targetUserId);
+      if (!error) {
+        setIsFollowing(false);
+        setStats((prev) => ({ ...prev, followers: Math.max(0, prev.followers - 1) }));
+        toast.success("Deixou de seguir");
+      }
+    } else {
+      const { error } = await supabase
+        .from("user_follows")
+        .insert({ follower_id: profile.user_id, following_id: targetUserId });
+      if (!error) {
+        setIsFollowing(true);
+        setStats((prev) => ({ ...prev, followers: prev.followers + 1 }));
+        toast.success("Seguindo");
+      }
+    }
+    setFollowLoading(false);
+  };
+
+  useEffect(() => {
+    const initProfile = async () => {
+      const activeUid = targetUserId || profile?.user_id;
+      if (!activeUid) return;
+
+      setLoadingProfile(true);
+
+      let currentProf = profile;
+      let currentR = role;
+
+      if (targetUserId && targetUserId !== profile?.user_id) {
+        const [{ data: p }, { data: r }] = await Promise.all([
+          supabase.from("profiles").select("*").eq("user_id", targetUserId).maybeSingle(),
+          supabase.from("user_roles").select("role").eq("user_id", targetUserId).maybeSingle(),
+        ]);
+
+        if (p) {
+          currentProf = p as SinapseProfile;
+          currentR = (r?.role as SinapseRole) ?? null;
+          setTargetProfile(currentProf);
+          setTargetRole(currentR);
+        }
+        if (profile?.user_id) {
+          await checkFollowStatus(profile.user_id, targetUserId);
+        }
+      } else {
+        setTargetProfile(null);
+        setTargetRole(null);
+        setIsFollowing(false);
+      }
+
+      if (currentProf) {
+        setProfileName(currentProf.display_name);
+        setDraftName(currentProf.display_name);
+        setProfileUsername(currentProf.handle ?? currentProf.email.split("@")[0] ?? "");
+        setDraftUsername(currentProf.handle ?? currentProf.email.split("@")[0] ?? "");
+        setProfileCourse(currentProf.course ?? "");
+        setDraftCourse(currentProf.course ?? "");
+        setProfileSemester(currentProf.semester ?? "");
+        setDraftSemester(currentProf.semester ?? "");
+        setDraftEmailLocal(currentProf.email.split("@")[0] ?? "");
+        setLastUsernameChange(currentProf.last_username_change ?? null);
+        setAvatarUrl(currentProf.avatar_url ?? null);
+      }
+
+      await loadProfileStats(activeUid);
+      setLoadingProfile(false);
+    };
+
+    initProfile();
+    setActiveTab("posts");
+  }, [targetUserId, profile, role]);
+
+  useEffect(() => {
+    if (activeTab === "saved") {
+      loadSavedPosts();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  if (loadingProfile) {
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-text-faint">
-        Carregando perfil…
+      <div className="flex flex-col min-h-screen bg-background">
+        <TopBar showLogo={false} title="Perfil" onBack={onBack} />
+        <div className="flex flex-1 items-center justify-center py-24">
+          <Loader2 className="h-6 w-6 animate-spin text-text-faint" />
+        </div>
       </div>
     );
   }
 
-  const emailParts = profile.email.split("@");
+  if (!displayProfile) {
+    return (
+      <div className="flex flex-col min-h-screen bg-background">
+        <TopBar showLogo={false} title="Perfil" onBack={onBack} />
+        <div className="flex flex-1 items-center justify-center py-24 text-sm text-text-faint">
+          Perfil não encontrado.
+        </div>
+      </div>
+    );
+  }
+
+  const emailParts = displayProfile.email.split("@");
   const currentEmailLocal = emailParts[0] ?? "";
   const currentEmailDomain = emailParts.slice(1).join("@");
   const previewEmail = `${draftEmailLocal || currentEmailLocal}@${currentEmailDomain}`;
@@ -118,49 +444,54 @@ export const PerfilScreen = ({
   const courseValue = draftCourse.replace(/[^a-zA-Z\s]/g, "").slice(0, 50);
   const semesterValue = draftSemester.replace(/\D/g, "").slice(0, 2);
 
+  const tabs = isOwnProfile ? ["Publicações", "Salvos", "Vagas"] : ["Publicações"];
+
   return (
     <div className="flex flex-col">
       <TopBar
         showLogo={false}
         title={usernameValue ? `@${usernameValue}` : "Sem nome de usuário"}
+        onBack={onBack}
         rightSlot={
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="rounded-full p-2 transition-smooth hover:bg-secondary"
-                aria-label="Abrir menu de perfil"
-              >
-                <MoreVertical className="h-5 w-5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem
-                className="gap-2"
-                onSelect={(event) => {
-                  event.preventDefault();
-                  setSettingsOpen(true);
-                }}
-              >
-                <Settings className="h-4 w-4" />
-                Configurações
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="gap-2" onSelect={() => onLogout()}>
-                <LogOut className="h-4 w-4" />
-                Sair
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="gap-2 text-destructive focus:text-destructive"
-                onSelect={(event) => {
-                  event.preventDefault();
-                  setDeleteOpen(true);
-                }}
-              >
-                <Trash2 className="h-4 w-4" />
-                Deletar conta
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          isOwnProfile ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="rounded-full p-2 transition-smooth hover:bg-secondary"
+                  aria-label="Abrir menu de perfil"
+                >
+                  <MoreVertical className="h-5 w-5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuItem
+                  className="gap-2"
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    setSettingsOpen(true);
+                  }}
+                >
+                  <Settings className="h-4 w-4" />
+                  Configurações
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="gap-2" onSelect={() => onLogout()}>
+                  <LogOut className="h-4 w-4" />
+                  Sair
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="gap-2 text-destructive focus:text-destructive"
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    setDeleteOpen(true);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Deletar conta
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null
         }
       />
 
@@ -168,15 +499,16 @@ export const PerfilScreen = ({
         <div className="flex items-center gap-4">
           <Avatar
             name={profileName}
+            url={isOwnProfile ? avatarUrl : displayProfile.avatar_url}
             color="from-zinc-300 to-zinc-500"
             size="xl"
             ring
           />
           <div className="grid flex-1 grid-cols-3 gap-2 text-center">
             {[
-              { n: "0", l: "posts" },
-              { n: "0", l: "conexões" },
-              { n: "0", l: "seguindo" },
+              { n: stats.posts.toString(), l: "posts" },
+              { n: stats.followers.toString(), l: "seguidores" },
+              { n: stats.following.toString(), l: "seguindo" },
             ].map((s) => (
               <div key={s.l}>
                 <p className="font-display text-lg font-semibold">{s.n}</p>
@@ -191,7 +523,7 @@ export const PerfilScreen = ({
             <h2 className="font-display text-base font-semibold">
               {profileName}
             </h2>
-            {role && (role === "professor" || role === "admin") && (
+            {displayRole && (displayRole === "professor" || displayRole === "admin") && (
               <span
                 className="grid h-4 w-4 place-items-center rounded-full bg-foreground text-background"
                 title="Verificado"
@@ -200,19 +532,19 @@ export const PerfilScreen = ({
               </span>
             )}
           </div>
-          {role && (
+          {displayRole && (
             <p className="mt-0.5 text-[11px] uppercase tracking-wider text-text-faint">
-              {roleLabel[role]}
+              {roleLabel[displayRole]}
             </p>
           )}
-          {(profile.course || profile.semester) && (
+          {(displayProfile.course || displayProfile.semester) && (
             <p className="mt-0.5 text-xs text-text-subtle">
-              {[profile.course, profile.semester].filter(Boolean).join(" · ")}
+              {[displayProfile.course, displayProfile.semester].filter(Boolean).join(" · ")}
             </p>
           )}
-          {profile.bio && (
+          {displayProfile.bio && (
             <p className="mt-2 text-sm leading-relaxed text-foreground/90">
-              {profile.bio}
+              {displayProfile.bio}
             </p>
           )}
         </div>
@@ -226,7 +558,7 @@ export const PerfilScreen = ({
             <p className="text-[11px] uppercase tracking-wider text-text-faint">
               E-mail institucional
             </p>
-            <p className="truncate text-sm font-semibold">{profile.email}</p>
+            <p className="truncate text-sm font-semibold">{displayProfile.email}</p>
           </div>
           {emailVerified ? (
             <span className="shrink-0 rounded-full bg-online/20 px-2 py-0.5 text-[10px] font-semibold text-online">
@@ -239,75 +571,443 @@ export const PerfilScreen = ({
           )}
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <button
-            onClick={() => {
-              setDraftName(profileName);
-              setEditOpen(true);
-            }}
-            className="rounded-xl bg-foreground py-2.5 text-sm font-semibold text-background transition-smooth hover:bg-foreground/90"
-          >
-            Editar perfil
-          </button>
-          <button className="rounded-xl bg-secondary py-2.5 text-sm font-semibold text-foreground transition-smooth hover:bg-accent">
-            Compartilhar
-          </button>
-        </div>
+        {isOwnProfile ? (
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <button
+              onClick={() => {
+                setDraftName(profileName);
+                setEditOpen(true);
+              }}
+              className="rounded-xl bg-foreground py-2.5 text-sm font-semibold text-background transition-smooth hover:bg-foreground/90"
+            >
+              Editar perfil
+            </button>
+            <button className="rounded-xl bg-secondary py-2.5 text-sm font-semibold text-foreground transition-smooth hover:bg-accent">
+              Compartilhar
+            </button>
+          </div>
+        ) : (
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <button
+              onClick={toggleFollow}
+              disabled={followLoading}
+              className={cn(
+                "rounded-xl py-2.5 text-sm font-semibold transition-smooth",
+                isFollowing
+                  ? "bg-secondary text-foreground hover:bg-accent"
+                  : "bg-foreground text-background hover:bg-foreground/90"
+              )}
+            >
+              {followLoading ? "Processando..." : isFollowing ? "Seguindo" : "Seguir"}
+            </button>
+            <button
+              onClick={onBack}
+              className="rounded-xl bg-secondary py-2.5 text-sm font-semibold text-foreground transition-smooth hover:bg-accent"
+            >
+              Voltar
+            </button>
+          </div>
+        )}
 
-        {(profile.course || profile.semester) && (
+        {(displayProfile.course || displayProfile.semester) && (
           <div className="mt-5 grid grid-cols-2 gap-2.5">
             <div className="rounded-2xl border border-hairline bg-gradient-card p-3.5">
               <GraduationCap className="h-5 w-5 text-text-subtle" />
               <p className="mt-2 text-[11px] text-text-faint">Curso</p>
-              <p className="text-sm font-semibold">{profile.course || "—"}</p>
+              <p className="text-sm font-semibold">{displayProfile.course || "—"}</p>
             </div>
             <div className="rounded-2xl border border-hairline bg-gradient-card p-3.5">
               <BookOpen className="h-5 w-5 text-text-subtle" />
               <p className="mt-2 text-[11px] text-text-faint">Período</p>
-              <p className="text-sm font-semibold">{profile.semester || "—"}</p>
+              <p className="text-sm font-semibold">{displayProfile.semester || "—"}</p>
             </div>
           </div>
         )}
       </section>
 
       <div className="mt-6 flex border-y border-hairline">
-        {["Publicações", "Salvos", "Vagas"].map((t, i) => (
-          <button
-            key={t}
-            className={
-              "flex-1 py-3 text-xs font-semibold transition-smooth " +
-              (i === 0
-                ? "border-t-2 border-foreground -mt-px text-foreground"
-                : "text-text-faint")
-            }
-          >
-            {t}
-          </button>
-        ))}
+        {tabs.map((t) => {
+          const tabKey = t === "Publicações" ? "posts" : t === "Salvos" ? "saved" : "vagas";
+          const isActive = activeTab === tabKey;
+          return (
+            <button
+              key={t}
+              onClick={() => setActiveTab(tabKey)}
+              className={cn(
+                "flex-1 py-3 text-xs font-semibold transition-smooth",
+                isActive
+                  ? "border-t-2 border-foreground -mt-px text-foreground"
+                  : "text-text-faint"
+              )}
+            >
+              {t}
+            </button>
+          );
+        })}
       </div>
 
-      <div className="grid grid-cols-3 gap-0.5 p-0.5">
-        {Array.from({ length: 9 }).map((_, i) => (
-          <div
-            key={i}
-            className="aspect-square bg-gradient-accent ring-1 ring-hairline"
-          />
-        ))}
+      <div className="flex flex-col">
+        {activeTab === "posts" && (
+          <div className="flex flex-col">
+            {loadingPosts ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-5 w-5 animate-spin text-text-faint" />
+              </div>
+            ) : posts.length === 0 ? (
+              <p className="py-16 text-center text-sm text-text-faint">
+                Nenhuma publicação ainda.
+              </p>
+            ) : (
+              <section className="divide-y divide-hairline">
+                {posts.map((p) => {
+                  const isMine = currentUser?.id === p.user_id;
+                  const isTeacher =
+                    p.author.role === "professor" || p.author.role === "admin";
+                  return (
+                    <article key={p.id} className="px-4 py-4">
+                      <header className="flex items-center justify-between">
+                        <div
+                          className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => {
+                            if (p.user_id !== displayProfile.user_id) {
+                              onViewProfile?.(p.user_id);
+                            }
+                          }}
+                        >
+                          <Avatar name={p.author.display_name} size="md" />
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-sm font-semibold leading-tight">
+                                {p.author.display_name}
+                              </p>
+                              {isTeacher && (
+                                <span
+                                  className="grid h-3.5 w-3.5 place-items-center rounded-full bg-foreground text-background"
+                                  title="Professor verificado"
+                                >
+                                  <ShieldCheck className="h-2.5 w-2.5" />
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-text-faint">
+                              @{p.author.handle ?? "user"}
+                              {p.author.course && ` · ${p.author.course}`}
+                              {" · "}
+                              {timeAgo(p.created_at)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="relative">
+                          <button
+                            className="text-text-faint hover:text-foreground"
+                            onClick={() =>
+                              setOpenPostMenu(openPostMenu === p.id ? null : p.id)
+                            }
+                            aria-label="Mais opções"
+                          >
+                            <MoreHorizontal className="h-5 w-5" />
+                          </button>
+                          {openPostMenu === p.id && isMine && (
+                            <button
+                              onClick={() => {
+                                setOpenPostMenu(null);
+                                removePost(p.id);
+                              }}
+                              className="absolute right-0 top-7 z-10 flex items-center gap-2 rounded-xl border border-hairline bg-surface-overlay px-3 py-2 text-xs font-medium text-destructive shadow-glow"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" /> Apagar
+                            </button>
+                          )}
+                        </div>
+                      </header>
+
+                      <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
+                        {p.content}
+                      </p>
+
+                      {p.media_url && (
+                        <div className="mt-3 overflow-hidden rounded-2xl border border-hairline bg-secondary">
+                          {p.media_type?.startsWith("video/") ? (
+                            <video
+                              src={p.media_url}
+                              controls
+                              className="max-h-[420px] w-full bg-black object-contain"
+                            />
+                          ) : (
+                            <img
+                              src={p.media_url}
+                              alt="Mídia do post"
+                              className="max-h-[420px] w-full object-cover"
+                            />
+                          )}
+                        </div>
+                      )}
+
+                      <footer className="mt-3 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <button
+                            onClick={() => toggleLikePost(p)}
+                            className="flex items-center gap-1.5 transition-smooth"
+                          >
+                            <Heart
+                              className={cn(
+                                "h-5 w-5 transition-smooth",
+                                p.liked_by_me
+                                  ? "fill-destructive text-destructive"
+                                  : "text-text-subtle hover:text-foreground",
+                              )}
+                            />
+                            <span className="text-xs font-medium text-text-subtle">
+                              {p.likes_count}
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => setOpenComments(p.id)}
+                            className="flex items-center gap-1.5 text-text-subtle transition-smooth hover:text-foreground"
+                          >
+                            <MessageCircle className="h-5 w-5" />
+                            <span className="text-xs font-medium">
+                              {p.comments_count}
+                            </span>
+                          </button>
+                          <button
+                            className="text-text-subtle hover:text-foreground"
+                            aria-label="Compartilhar"
+                          >
+                            <Send className="h-5 w-5" />
+                          </button>
+                        </div>
+                        <button
+                          onClick={() => toggleSavePost(p)}
+                          className="text-text-subtle hover:text-foreground transition-smooth"
+                          aria-label="Salvar"
+                        >
+                          <Bookmark
+                            className={cn(
+                              "h-5 w-5 transition-smooth",
+                              p.saved_by_me
+                                ? "fill-foreground text-foreground"
+                                : "text-text-subtle hover:text-foreground",
+                            )}
+                          />
+                        </button>
+                      </footer>
+                    </article>
+                  );
+                })}
+              </section>
+            )}
+          </div>
+        )}
+
+        {activeTab === "saved" && (
+          <div className="flex flex-col">
+            {savedLoading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-5 w-5 animate-spin text-text-faint" />
+              </div>
+            ) : savedPosts.length === 0 ? (
+              <p className="py-16 text-center text-sm text-text-faint">
+                Nenhuma publicação salva.
+              </p>
+            ) : (
+              <section className="divide-y divide-hairline">
+                {savedPosts.map((p) => {
+                  const isTeacher =
+                    p.author.role === "professor" || p.author.role === "admin";
+                  return (
+                    <article key={p.id} className="px-4 py-4">
+                      <header className="flex items-center justify-between">
+                        <div
+                          className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => {
+                            if (p.user_id !== displayProfile.user_id) {
+                              onViewProfile?.(p.user_id);
+                            }
+                          }}
+                        >
+                          <Avatar name={p.author.display_name} size="md" />
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-sm font-semibold leading-tight">
+                                {p.author.display_name}
+                              </p>
+                              {isTeacher && (
+                                <span
+                                  className="grid h-3.5 w-3.5 place-items-center rounded-full bg-foreground text-background"
+                                  title="Professor verificado"
+                                >
+                                  <ShieldCheck className="h-2.5 w-2.5" />
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-text-faint">
+                              @{p.author.handle ?? "user"}
+                              {p.author.course && ` · ${p.author.course}`}
+                              {" · "}
+                              {timeAgo(p.created_at)}
+                            </p>
+                          </div>
+                        </div>
+                      </header>
+
+                      <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
+                        {p.content}
+                      </p>
+
+                      {p.media_url && (
+                        <div className="mt-3 overflow-hidden rounded-2xl border border-hairline bg-secondary">
+                          {p.media_type?.startsWith("video/") ? (
+                            <video
+                              src={p.media_url}
+                              controls
+                              className="max-h-[420px] w-full bg-black object-contain"
+                            />
+                          ) : (
+                            <img
+                              src={p.media_url}
+                              alt="Mídia do post"
+                              className="max-h-[420px] w-full object-cover"
+                            />
+                          )}
+                        </div>
+                      )}
+
+                      <footer className="mt-3 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <button
+                            onClick={() => toggleLikeSavedPost(p)}
+                            className="flex items-center gap-1.5 transition-smooth"
+                          >
+                            <Heart
+                              className={cn(
+                                "h-5 w-5 transition-smooth",
+                                p.liked_by_me
+                                  ? "fill-destructive text-destructive"
+                                  : "text-text-subtle hover:text-foreground",
+                              )}
+                            />
+                            <span className="text-xs font-medium text-text-subtle">
+                              {p.likes_count}
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => setOpenComments(p.id)}
+                            className="flex items-center gap-1.5 text-text-subtle transition-smooth hover:text-foreground"
+                          >
+                            <MessageCircle className="h-5 w-5" />
+                            <span className="text-xs font-medium">
+                              {p.comments_count}
+                            </span>
+                          </button>
+                          <button
+                            className="text-text-subtle hover:text-foreground"
+                            aria-label="Compartilhar"
+                          >
+                            <Send className="h-5 w-5" />
+                          </button>
+                        </div>
+                        <button
+                          onClick={() => toggleSaveSavedPost(p)}
+                          className="text-text-subtle hover:text-foreground transition-smooth"
+                          aria-label="Salvar"
+                        >
+                          <Bookmark
+                            className={cn(
+                              "h-5 w-5 transition-smooth",
+                              p.saved_by_me
+                                ? "fill-foreground text-foreground"
+                                : "text-text-subtle hover:text-foreground",
+                            )}
+                          />
+                        </button>
+                      </footer>
+                    </article>
+                  );
+                })}
+              </section>
+            )}
+          </div>
+        )}
+
+        {activeTab === "vagas" && (
+          <p className="py-16 text-center text-sm text-text-faint">
+            Nenhuma vaga compartilhada.
+          </p>
+        )}
       </div>
+
+      {openComments && (
+        <CommentsSheet
+          postId={openComments}
+          currentUser={currentUser || null}
+          onClose={() => setOpenComments(null)}
+          onViewProfile={(uid) => {
+            setOpenComments(null);
+            if (uid !== displayProfile.user_id) {
+              onViewProfile?.(uid);
+            }
+          }}
+        />
+      )}
 
       <Dialog
         open={editOpen}
         onOpenChange={(open) => {
-          if (!savingName) setEditOpen(open);
+          if (!savingName && !uploadingAvatar) {
+            setEditOpen(open);
+            if (!open) {
+              setAvatarFile(null);
+              setAvatarPreview(null);
+            }
+          }
         }}
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Editar perfil</DialogTitle>
             <DialogDescription>
-              Altere o nome, curso e período do seu perfil.
+              Altere a foto, nome, curso e período do seu perfil.
             </DialogDescription>
           </DialogHeader>
+
+          {/* Avatar picker */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="relative">
+              <Avatar
+                name={draftName || profileName}
+                url={avatarPreview ?? avatarUrl}
+                color="from-zinc-300 to-zinc-500"
+                size="xl"
+                ring
+              />
+              <button
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+                className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full bg-foreground text-background shadow-md hover:bg-foreground/80 transition-smooth"
+                aria-label="Trocar foto de perfil"
+              >
+                <Camera className="h-3.5 w-3.5" />
+              </button>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (file.size > 5 * 1024 * 1024) {
+                    toast.error("A foto deve ter no máximo 5 MB.");
+                    return;
+                  }
+                  setAvatarFile(file);
+                  setAvatarPreview(URL.createObjectURL(file));
+                }}
+              />
+            </div>
+            <p className="text-[11px] text-text-faint">Toque na câmera para trocar a foto</p>
+          </div>
 
           <label className="space-y-1">
             <span className="text-xs font-medium text-text-faint">Nome</span>
@@ -370,7 +1070,7 @@ export const PerfilScreen = ({
             </button>
             <button
               type="button"
-              disabled={savingName}
+              disabled={savingName || uploadingAvatar}
               onClick={async () => {
                 const trimmed = draftName.trim();
                 if (trimmed.length < 2) {
@@ -386,30 +1086,74 @@ export const PerfilScreen = ({
                   .slice(0, 2);
 
                 setSavingName(true);
-                const { error } = await supabase
-                  .from("profiles")
-                  .update({
-                    display_name: trimmed,
-                    course: courseText || null,
-                    semester: semesterDigits || null,
-                  })
-                  .eq("user_id", profile.user_id);
-                setSavingName(false);
+                setUploadingAvatar(Boolean(avatarFile));
 
-                if (error) {
-                  toast.error(error.message);
-                  return;
+                try {
+                  let newAvatarUrl: string | null = avatarUrl?.split("?")[0] ?? null;
+
+                  if (avatarFile) {
+                    if (!currentUser) {
+                      toast.error("Faça login novamente para enviar a foto.");
+                      return;
+                    }
+
+                    const ext = avatarFile.name.split(".").pop()?.toLowerCase() ?? "jpg";
+                    const filePath = `${currentUser.id}/avatar-${Date.now()}.${ext}`;
+                    const { data: uploadData, error: uploadError } = await supabase.storage
+                      .from("avatars")
+                      .upload(filePath, avatarFile, {
+                        contentType: avatarFile.type,
+                        upsert: false,
+                      });
+
+                    if (uploadError) {
+                      toast.error("Erro ao enviar foto: " + uploadError.message);
+                      return;
+                    }
+
+                    const { data: pub } = supabase.storage
+                      .from("avatars")
+                      .getPublicUrl(uploadData.path);
+                    newAvatarUrl = pub.publicUrl;
+                  }
+
+                  const { error } = await supabase
+                    .from("profiles")
+                    .update({
+                      display_name: trimmed,
+                      course: courseText || null,
+                      semester: semesterDigits || null,
+                      avatar_url: newAvatarUrl,
+                    })
+                    .eq("user_id", profile!.user_id);
+
+                  if (error) {
+                    toast.error(error.message);
+                    return;
+                  }
+
+                  setProfileName(trimmed);
+                  setProfileCourse(courseText);
+                  setProfileSemester(semesterDigits);
+                  setAvatarUrl(newAvatarUrl ? `${newAvatarUrl}?t=${Date.now()}` : null);
+                  setAvatarFile(null);
+                  setAvatarPreview(null);
+                  setEditOpen(false);
+                  toast.success("Perfil atualizado com sucesso.");
+                } catch (error) {
+                  toast.error(
+                    error instanceof Error
+                      ? `Erro ao salvar perfil: ${error.message}`
+                      : "Erro ao salvar perfil.",
+                  );
+                } finally {
+                  setUploadingAvatar(false);
+                  setSavingName(false);
                 }
-
-                setProfileName(trimmed);
-                setProfileCourse(courseText);
-                setProfileSemester(semesterDigits);
-                setEditOpen(false);
-                toast.success("Perfil atualizado com sucesso.");
               }}
               className="rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition-smooth hover:bg-foreground/90 disabled:opacity-60"
             >
-              {savingName ? "Salvando..." : "Salvar"}
+              {savingName || uploadingAvatar ? "Salvando..." : "Salvar"}
             </button>
           </DialogFooter>
         </DialogContent>

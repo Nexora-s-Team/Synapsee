@@ -14,14 +14,16 @@ export interface FeedPost {
   author: {
     display_name: string;
     handle: string | null;
+    avatar_url: string | null;
     course: string | null;
     semester: string | null;
     role: string | null;
   };
   liked_by_me: boolean;
+  saved_by_me: boolean;
 }
 
-export const usePosts = (currentUser: User | null) => {
+export const usePosts = (currentUser: User | null, targetUserId?: string | null) => {
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -52,12 +54,26 @@ export const usePosts = (currentUser: User | null) => {
     }
 
     setLoading(true);
+
+    let userIdsToFetch = [currentUser.id];
+    if (targetUserId) {
+      userIdsToFetch = [targetUserId];
+    } else {
+      const { data: follows } = await supabase
+        .from("user_follows")
+        .select("following_id")
+        .eq("follower_id", currentUser.id);
+      if (follows) {
+        userIdsToFetch = [currentUser.id, ...follows.map((f) => f.following_id)];
+      }
+    }
+
     const { data: rawPosts, error: selectError } = await supabase
       .from("posts")
       .select(
         "id, user_id, content, media_url, media_type, likes_count, comments_count, created_at",
       )
-      .eq("user_id", currentUser.id)
+      .in("user_id", userIdsToFetch)
       .order("created_at", { ascending: false })
       .limit(50);
 
@@ -65,7 +81,7 @@ export const usePosts = (currentUser: User | null) => {
       const { data: legacyPosts, error: legacyError } = await supabase
         .from("posts")
         .select("id, user_id, content, likes_count, comments_count, created_at")
-        .eq("user_id", currentUser.id)
+        .in("user_id", userIdsToFetch)
         .order("created_at", { ascending: false })
         .limit(50);
 
@@ -82,11 +98,11 @@ export const usePosts = (currentUser: User | null) => {
       }));
 
       const userIds = Array.from(new Set(normalized.map((p) => p.user_id)));
-      const [{ data: profiles }, { data: roles }, { data: myLikes }] =
+      const [{ data: profiles }, { data: roles }, { data: myLikes }, { data: mySaves }] =
         await Promise.all([
           supabase
             .from("profiles")
-            .select("user_id, display_name, handle, course, semester")
+            .select("user_id, display_name, handle, avatar_url, course, semester")
             .in("user_id", userIds),
           supabase
             .from("user_roles")
@@ -102,11 +118,22 @@ export const usePosts = (currentUser: User | null) => {
                   normalized.map((p) => p.id),
                 )
             : Promise.resolve({ data: [] as { post_id: string }[] }),
+          currentUser
+            ? supabase
+                .from("post_saves")
+                .select("post_id")
+                .eq("user_id", currentUser.id)
+                .in(
+                  "post_id",
+                  normalized.map((p) => p.id),
+                )
+            : Promise.resolve({ data: [] as { post_id: string }[] }),
         ]);
 
       const profileMap = new Map((profiles ?? []).map((p) => [p.user_id, p]));
       const roleMap = new Map((roles ?? []).map((r) => [r.user_id, r.role]));
       const likedSet = new Set((myLikes ?? []).map((l) => l.post_id));
+      const savedSet = new Set((mySaves ?? []).map((s) => s.post_id));
 
       setPosts(
         normalized.map((p) => {
@@ -116,11 +143,13 @@ export const usePosts = (currentUser: User | null) => {
             author: {
               display_name: prof?.display_name ?? "Usuário",
               handle: prof?.handle ?? null,
+              avatar_url: prof?.avatar_url ?? null,
               course: prof?.course ?? null,
               semester: prof?.semester ?? null,
               role: roleMap.get(p.user_id) ?? null,
             },
             liked_by_me: likedSet.has(p.id),
+            saved_by_me: savedSet.has(p.id),
           };
         }),
       );
@@ -135,11 +164,11 @@ export const usePosts = (currentUser: User | null) => {
     }
 
     const userIds = Array.from(new Set(rawPosts.map((p) => p.user_id)));
-    const [{ data: profiles }, { data: roles }, { data: myLikes }] =
+    const [{ data: profiles }, { data: roles }, { data: myLikes }, { data: mySaves }] =
       await Promise.all([
         supabase
           .from("profiles")
-          .select("user_id, display_name, handle, course, semester")
+          .select("user_id, display_name, handle, avatar_url, course, semester")
           .in("user_id", userIds),
         supabase
           .from("user_roles")
@@ -155,11 +184,22 @@ export const usePosts = (currentUser: User | null) => {
                 rawPosts.map((p) => p.id),
               )
           : Promise.resolve({ data: [] as { post_id: string }[] }),
+        currentUser
+          ? supabase
+              .from("post_saves")
+              .select("post_id")
+              .eq("user_id", currentUser.id)
+              .in(
+                "post_id",
+                rawPosts.map((p) => p.id),
+              )
+          : Promise.resolve({ data: [] as { post_id: string }[] }),
       ]);
 
     const profileMap = new Map((profiles ?? []).map((p) => [p.user_id, p]));
     const roleMap = new Map((roles ?? []).map((r) => [r.user_id, r.role]));
     const likedSet = new Set((myLikes ?? []).map((l) => l.post_id));
+    const savedSet = new Set((mySaves ?? []).map((s) => s.post_id));
 
     setPosts(
       rawPosts.map((p) => {
@@ -169,11 +209,13 @@ export const usePosts = (currentUser: User | null) => {
           author: {
             display_name: prof?.display_name ?? "Usuário",
             handle: prof?.handle ?? null,
+            avatar_url: prof?.avatar_url ?? null,
             course: prof?.course ?? null,
             semester: prof?.semester ?? null,
             role: roleMap.get(p.user_id) ?? null,
           },
           liked_by_me: likedSet.has(p.id),
+          saved_by_me: savedSet.has(p.id),
         };
       }),
     );
@@ -195,7 +237,7 @@ export const usePosts = (currentUser: User | null) => {
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.id]);
+  }, [currentUser?.id, targetUserId]);
 
   const create = async (content: string, media?: File | null) => {
     if (!currentUser) return { error: "Não autenticado" };
@@ -314,10 +356,10 @@ export const usePosts = (currentUser: User | null) => {
       prev.map((p) =>
         p.id === post.id
           ? {
-              ...p,
-              liked_by_me: !p.liked_by_me,
-              likes_count: p.likes_count + (p.liked_by_me ? -1 : 1),
-            }
+               ...p,
+               liked_by_me: !p.liked_by_me,
+               likes_count: p.likes_count + (p.liked_by_me ? -1 : 1),
+             }
           : p,
       ),
     );
@@ -334,12 +376,38 @@ export const usePosts = (currentUser: User | null) => {
     }
   };
 
+  const toggleSave = async (post: FeedPost) => {
+    if (!currentUser) return;
+    // optimistic
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === post.id
+          ? {
+               ...p,
+               saved_by_me: !p.saved_by_me,
+             }
+          : p,
+      ),
+    );
+    if (post.saved_by_me) {
+      await supabase
+        .from("post_saves")
+        .delete()
+        .eq("post_id", post.id)
+        .eq("user_id", currentUser.id);
+    } else {
+      await supabase
+        .from("post_saves")
+        .insert({ post_id: post.id, user_id: currentUser.id });
+    }
+  };
+
   const remove = async (postId: string) => {
     await supabase.from("posts").delete().eq("id", postId);
     await load();
   };
 
-  return { posts, loading, create, toggleLike, remove, reload: load };
+  return { posts, loading, create, toggleLike, toggleSave, remove, reload: load };
 };
 
 export interface PostComment {
@@ -349,7 +417,11 @@ export interface PostComment {
   media_url: string | null;
   media_type: string | null;
   created_at: string;
-  author: { display_name: string; handle: string | null };
+  author: {
+    display_name: string;
+    handle: string | null;
+    avatar_url: string | null;
+  };
 }
 
 export const useComments = (
@@ -410,7 +482,7 @@ export const useComments = (
       const userIds = Array.from(new Set(legacyRaw.map((c) => c.user_id)));
       const { data: profs } = await supabase
         .from("profiles")
-        .select("user_id, display_name, handle")
+        .select("user_id, display_name, handle, avatar_url")
         .in("user_id", userIds);
       const map = new Map((profs ?? []).map((p) => [p.user_id, p]));
       setComments(
@@ -421,6 +493,7 @@ export const useComments = (
           author: {
             display_name: map.get(c.user_id)?.display_name ?? "Usuário",
             handle: map.get(c.user_id)?.handle ?? null,
+            avatar_url: map.get(c.user_id)?.avatar_url ?? null,
           },
         })),
       );
@@ -436,7 +509,7 @@ export const useComments = (
     const userIds = Array.from(new Set(raw.map((c) => c.user_id)));
     const { data: profs } = await supabase
       .from("profiles")
-      .select("user_id, display_name, handle")
+      .select("user_id, display_name, handle, avatar_url")
       .in("user_id", userIds);
     const map = new Map((profs ?? []).map((p) => [p.user_id, p]));
     setComments(
@@ -445,6 +518,7 @@ export const useComments = (
         author: {
           display_name: map.get(c.user_id)?.display_name ?? "Usuário",
           handle: map.get(c.user_id)?.handle ?? null,
+          avatar_url: map.get(c.user_id)?.avatar_url ?? null,
         },
       })),
     );

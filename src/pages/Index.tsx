@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { BottomNav, Tab } from "@/components/sinapse/BottomNav";
 import { LoginScreen } from "@/components/sinapse/screens/LoginScreen";
@@ -27,6 +27,7 @@ const Index = () => {
     useAuth();
   const navigate = useNavigate();
   const { tab: routeTab } = useParams<{ tab?: string }>();
+  const [viewingUserId, setViewingUserId] = useState<string | null>(null);
 
   const tab: Tab = isTab(routeTab) ? routeTab : DEFAULT_TAB;
 
@@ -42,6 +43,7 @@ const Index = () => {
   }, [loading, session, routeTab, navigate]);
 
   const handleChangeTab = (nextTab: Tab) => {
+    setViewingUserId(null);
     navigate(`/app/${nextTab}`);
   };
 
@@ -56,18 +58,42 @@ const Index = () => {
       ) : (
         <>
           <div className="flex-1 overflow-y-auto pb-2">
-            {tab === "feed" && <FeedScreen user={user} profile={profile} />}
-            {tab === "avisos" && <AvisosScreen user={user} role={role} />}
-            {tab === "vagas" && <VagasScreen />}
-            {tab === "mensagens" && <MensagensScreen />}
-            {tab === "perfil" && (
+            {viewingUserId ? (
               <PerfilScreen
+                currentUser={user}
                 onLogout={signOut}
                 onDeleteAccount={deleteAccount}
                 profile={profile}
                 role={role}
                 emailVerified={Boolean(user?.email_confirmed_at)}
+                targetUserId={viewingUserId}
+                onBack={() => setViewingUserId(null)}
+                onViewProfile={setViewingUserId}
               />
+            ) : (
+              <>
+                {tab === "feed" && (
+                  <FeedScreen
+                    user={user}
+                    profile={profile}
+                    onViewProfile={setViewingUserId}
+                  />
+                )}
+                {tab === "avisos" && <AvisosScreen user={user} role={role} />}
+                {tab === "vagas" && <VagasScreen />}
+                {tab === "mensagens" && <MensagensScreen />}
+                {tab === "perfil" && (
+                  <PerfilScreen
+                    currentUser={user}
+                    onLogout={signOut}
+                    onDeleteAccount={deleteAccount}
+                    profile={profile}
+                    role={role}
+                    emailVerified={Boolean(user?.email_confirmed_at)}
+                    onViewProfile={setViewingUserId}
+                  />
+                )}
+              </>
             )}
           </div>
           <BottomNav active={tab} onChange={handleChangeTab} />
