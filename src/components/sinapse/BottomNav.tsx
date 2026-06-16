@@ -12,7 +12,7 @@ const items: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "feed", label: "Feed", icon: Home },
   { id: "avisos", label: "Avisos", icon: Megaphone },
   { id: "vagas", label: "Vagas", icon: Briefcase },
-  { id: "mensagens", label: "Chat", icon: MessageSquare },
+  { id: "mensagens", label: "Chat IA", icon: MessageSquare },
   { id: "perfil", label: "Perfil", icon: User },
 ];
 
