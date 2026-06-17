@@ -459,18 +459,16 @@ export const useComments = (
 
     setLoading(true);
     const { data: raw, error: selectError } = await supabase
-      .from("post_comments")
-      .select("id, user_id, content, media_url, media_type, created_at")
-      .eq("post_id", postId)
-      .eq("user_id", currentUser.id)
-      .order("created_at", { ascending: true });
+  .from("post_comments")
+  .select("id, user_id, content, media_url, media_type, created_at")
+  .eq("post_id", postId)
+  .order("created_at", { ascending: true });
 
     if (selectError && isMissingMediaSchemaError(selectError.message)) {
       const { data: legacyRaw, error: legacyError } = await supabase
         .from("post_comments")
         .select("id, user_id, content, created_at")
         .eq("post_id", postId)
-        .eq("user_id", currentUser.id)
         .order("created_at", { ascending: true });
 
       if (legacyError || !legacyRaw || legacyRaw.length === 0) {

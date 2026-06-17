@@ -37,12 +37,23 @@ interface SearchResultProfile {
   handle: string | null;
   course: string | null;
   semester: string | null;
+  avatar_url: string | null;
 }
 
-export const FeedScreen = ({ user, profile, onViewProfile }: FeedScreenProps) => {
-  const { posts, loading, create, toggleLike, toggleSave, remove } = usePosts(user);
-  const { notifications, loading: notifLoading, unreadCount, markAllRead, markRead } =
-    useNotifications(user);
+export const FeedScreen = ({
+  user,
+  profile,
+  onViewProfile,
+}: FeedScreenProps) => {
+  const { posts, loading, create, toggleLike, toggleSave, remove } =
+    usePosts(user);
+  const {
+    notifications,
+    loading: notifLoading,
+    unreadCount,
+    markAllRead,
+    markRead,
+  } = useNotifications(user);
   const [composerOpen, setComposerOpen] = useState(false);
   const [openComments, setOpenComments] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -61,7 +72,7 @@ export const FeedScreen = ({ user, profile, onViewProfile }: FeedScreenProps) =>
     setSearchLoading(true);
     const { data, error } = await supabase
       .from("profiles")
-      .select("user_id, display_name, handle, course, semester")
+      .select("user_id, display_name, handle, course, semester, avatar_url")
       .or(`display_name.ilike.%${query}%,handle.ilike.%${query}%`)
       .limit(10);
     setSearchLoading(false);
@@ -105,7 +116,8 @@ export const FeedScreen = ({ user, profile, onViewProfile }: FeedScreenProps) =>
         <div className="flex flex-col bg-background">
           {searchLoading ? (
             <div className="flex items-center justify-center py-12 text-sm text-text-faint">
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Buscando usuários…
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Buscando
+              usuários…
             </div>
           ) : searchResults.length === 0 ? (
             <div className="py-12 text-center text-sm text-text-faint">
@@ -119,7 +131,7 @@ export const FeedScreen = ({ user, profile, onViewProfile }: FeedScreenProps) =>
                   onClick={() => onViewProfile?.(u.user_id)}
                   className="flex w-full items-center gap-3 px-4 py-3 text-left transition-smooth hover:bg-secondary/40"
                 >
-                  <Avatar name={u.display_name} size="sm" />
+                  <Avatar name={u.display_name} url={u.avatar_url ?? undefined} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold leading-tight text-foreground">
                       {u.display_name}
@@ -138,7 +150,6 @@ export const FeedScreen = ({ user, profile, onViewProfile }: FeedScreenProps) =>
         </div>
       ) : (
         <>
-        
           {/*
           Stories (mock)
           <section className="border-b border-hairline">
@@ -177,7 +188,11 @@ export const FeedScreen = ({ user, profile, onViewProfile }: FeedScreenProps) =>
             onClick={() => setComposerOpen(true)}
             className="flex items-center gap-3 border-b border-hairline px-4 py-3 text-left transition-smooth hover:bg-secondary/40"
           >
-            <Avatar name={profile?.display_name ?? "?"} size="sm" />
+            <Avatar
+              name={profile?.display_name ?? "?"}
+              url={profile?.avatar_url ?? undefined}
+              size="sm"
+            />
             <span className="flex-1 text-sm text-text-faint">
               O que está acontecendo na Módulo?
             </span>
@@ -197,7 +212,8 @@ export const FeedScreen = ({ user, profile, onViewProfile }: FeedScreenProps) =>
                 Sem posts ainda
               </p>
               <p className="mt-1 text-sm text-text-faint">
-                Seja o primeiro a compartilhar algo ou siga perfis para ver publicações.
+                Seja o primeiro a compartilhar algo ou siga perfis para ver
+                publicações.
               </p>
               <button
                 onClick={() => setComposerOpen(true)}

@@ -71,7 +71,11 @@ export const PostComposer = ({ profile, onSubmit, onClose }: ComposerProps) => {
         </header>
 
         <div className="flex gap-3">
-          <Avatar name={profile?.display_name ?? "?"} size="md" />
+          <Avatar
+            name={profile?.display_name ?? "Você"}
+            url={profile?.avatar_url}
+            size="sm"
+          />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">
               {profile?.display_name ?? "Você"}

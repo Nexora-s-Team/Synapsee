@@ -1,6 +1,7 @@
+import React from "react";
 import { cn } from "@/lib/utils";
 
-interface AvatarProps {
+export interface AvatarProps {
   name: string;
   url?: string | null;
   color?: string;
@@ -17,14 +18,14 @@ const sizeMap = {
   xl: "h-24 w-24 text-2xl",
 };
 
-export const Avatar = ({
+export const Avatar: React.FC<AvatarProps> = ({
   name,
   url,
   color = "from-zinc-300 to-zinc-500",
   size = "md",
-  ring,
+  ring = false,
   className,
-}: AvatarProps) => {
+}) => {
   const initials = name
     .split(" ")
     .map((n) => n[0])
@@ -35,15 +36,19 @@ export const Avatar = ({
   return (
     <div
       className={cn(
-        "relative inline-flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br font-semibold text-zinc-900 shadow-soft overflow-hidden",
+        "relative inline-flex shrink-0 items-center justify-center rounded-full overflow-hidden bg-gradient-to-br font-semibold text-zinc-900",
         color,
         sizeMap[size],
-        ring && "ring-2 ring-foreground/80 ring-offset-2 ring-offset-background",
-        className,
+        ring && "ring-2 ring-foreground/80 ring-offset-2",
+        className
       )}
     >
       {url ? (
-        <img src={url} alt={name} className="h-full w-full object-cover" />
+        <img
+          src={url}
+          alt={name}
+          className="h-full w-full object-cover"
+        />
       ) : (
         initials
       )}

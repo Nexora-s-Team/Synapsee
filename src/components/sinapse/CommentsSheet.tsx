@@ -93,7 +93,11 @@ export const CommentsSheet = ({
                     className="cursor-pointer hover:opacity-80 transition-opacity"
                     onClick={() => onViewProfile?.(c.user_id)}
                   >
-                    <Avatar name={c.author.display_name} size="sm" />
+                    <Avatar
+                      name={c.author.display_name}
+                      url={c.author.avatar_url}
+                      size="sm"
+                    />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">

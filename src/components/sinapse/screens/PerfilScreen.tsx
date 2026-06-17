@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   BookOpen,
   Camera,
@@ -115,7 +116,10 @@ export const PerfilScreen = ({
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // Dynamic Profile and Stats states
-  const [targetProfile, setTargetProfile] = useState<SinapseProfile | null>(null);
+  const [targetProfile, setTargetProfile] = useState<SinapseProfile | null>(
+    null,
+  );
+  
   const [targetRole, setTargetRole] = useState<SinapseRole | null>(null);
   const [stats, setStats] = useState({ posts: 0, followers: 0, following: 0 });
   const [isFollowing, setIsFollowing] = useState(false);
@@ -123,7 +127,9 @@ export const PerfilScreen = ({
   const [followLoading, setFollowLoading] = useState(false);
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<"posts" | "saved" | "vagas">("posts");
+  const [activeTab, setActiveTab] = useState<"posts" | "saved" | "vagas">(
+    "posts",
+  );
 
   // Comments & Post Actions
   const [openComments, setOpenComments] = useState<string | null>(null);
@@ -133,6 +139,7 @@ export const PerfilScreen = ({
   const [savedPosts, setSavedPosts] = useState<FeedPost[]>([]);
   const [savedLoading, setSavedLoading] = useState(false);
 
+  const navigate = useNavigate();
   const isOwnProfile = !targetUserId || targetUserId === profile?.user_id;
   const displayProfile = isOwnProfile ? profile : targetProfile;
   const displayRole = isOwnProfile ? role : targetRole;
@@ -189,7 +196,8 @@ export const PerfilScreen = ({
 
     const { data: rawSaves, error } = await supabase
       .from("post_saves")
-      .select(`
+      .select(
+        `
         post_id,
         posts (
           id,
@@ -201,7 +209,8 @@ export const PerfilScreen = ({
           comments_count,
           created_at
         )
-      `)
+      `,
+      )
       .eq("user_id", profile.user_id)
       .order("created_at", { ascending: false });
 
@@ -223,69 +232,65 @@ export const PerfilScreen = ({
 
     const authorIds = Array.from(new Set(postsList.map((p) => p.user_id)));
     const [{ data: authorProfiles }, { data: authorRoles }, { data: myLikes }] =
-  await Promise.all([
-    supabase
-      .from("profiles")
-      .select(
-        "user_id, display_name, handle, avatar_url, course, semester"
-      )
-      .in("user_id", authorIds),
+      await Promise.all([
+        supabase
+          .from("profiles")
+          .select("user_id, display_name, handle, avatar_url, course, semester")
+          .in("user_id", authorIds),
 
-    supabase
-      .from("user_roles")
-      .select("user_id, role")
-      .in("user_id", authorIds),
+        supabase
+          .from("user_roles")
+          .select("user_id, role")
+          .in("user_id", authorIds),
 
-    supabase
-      .from("post_likes")
-      .select("post_id")
-      .eq("user_id", profile.user_id)
-      .in(
-        "post_id",
-        postsList.map((p) => p.id)
-      ),
-  ]);
+        supabase
+          .from("post_likes")
+          .select("post_id")
+          .eq("user_id", profile.user_id)
+          .in(
+            "post_id",
+            postsList.map((p) => p.id),
+          ),
+      ]);
 
-const profileMap = new Map(
-  (authorProfiles ?? []).map((p) => [p.user_id, p])
-);
+    const profileMap = new Map(
+      (authorProfiles ?? []).map((p) => [p.user_id, p]),
+    );
 
-const roleMap = new Map(
-  (authorRoles ?? []).map((r) => [r.user_id, r.role])
-);
+    const roleMap = new Map(
+      (authorRoles ?? []).map((r) => [r.user_id, r.role]),
+    );
 
-const likedSet = new Set(
-  (myLikes ?? []).map((l) => l.post_id)
-);
+    const likedSet = new Set((myLikes ?? []).map((l) => l.post_id));
 
-const formatted: FeedPost[] = postsList.map((p) => {
-  const prof = profileMap.get(p.user_id);
+    const formatted: FeedPost[] = postsList.map((p) => {
+      const prof = profileMap.get(p.user_id);
 
-  return {
-    id: p.id,
-    user_id: p.user_id,
-    content: p.content,
-    media_url: p.media_url,
-    media_type: p.media_type,
-    likes_count: p.likes_count,
-    comments_count: p.comments_count,
-    created_at: p.created_at,
+      return {
+        id: p.id,
+        user_id: p.user_id,
+        content: p.content,
+        media_url: p.media_url,
+        media_type: p.media_type,
+        likes_count: p.likes_count,
+        comments_count: p.comments_count,
+        created_at: p.created_at,
 
-    author: {
-      display_name: prof?.display_name ?? "Usuário",
-      handle: prof?.handle ?? "user",
-      avatar_url: prof?.avatar_url ?? null,
-      course: prof?.course ?? null,
-      semester: prof?.semester ?? null,
-      role: (roleMap.get(p.user_id) as SinapseRole) ?? "aluno",
-    },
+        author: {
+          display_name: prof?.display_name ?? "Usuário",
+          handle: prof?.handle ?? "user",
+          avatar_url: prof?.avatar_url ?? null,
+          course: prof?.course ?? null,
+          semester: prof?.semester ?? null,
+          role: (roleMap.get(p.user_id) as SinapseRole) ?? "aluno",
+        },
 
-    liked_by_me: likedSet.has(p.id),
-    saved_by_me: true,
-  };
-});
+        liked_by_me: likedSet.has(p.id),
+        saved_by_me: true,
+      };
+    });
 
-setSavedPosts(formatted);
+    setSavedPosts(formatted);
     setSavedLoading(false);
   };
 
@@ -336,7 +341,10 @@ setSavedPosts(formatted);
         .eq("following_id", targetUserId);
       if (!error) {
         setIsFollowing(false);
-        setStats((prev) => ({ ...prev, followers: Math.max(0, prev.followers - 1) }));
+        setStats((prev) => ({
+          ...prev,
+          followers: Math.max(0, prev.followers - 1),
+        }));
         toast.success("Deixou de seguir");
       }
     } else {
@@ -364,8 +372,16 @@ setSavedPosts(formatted);
 
       if (targetUserId && targetUserId !== profile?.user_id) {
         const [{ data: p }, { data: r }] = await Promise.all([
-          supabase.from("profiles").select("*").eq("user_id", targetUserId).maybeSingle(),
-          supabase.from("user_roles").select("role").eq("user_id", targetUserId).maybeSingle(),
+          supabase
+            .from("profiles")
+            .select("*")
+            .eq("user_id", targetUserId)
+            .maybeSingle(),
+          supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", targetUserId)
+            .maybeSingle(),
         ]);
 
         if (p) {
@@ -386,8 +402,12 @@ setSavedPosts(formatted);
       if (currentProf) {
         setProfileName(currentProf.display_name);
         setDraftName(currentProf.display_name);
-        setProfileUsername(currentProf.handle ?? currentProf.email.split("@")[0] ?? "");
-        setDraftUsername(currentProf.handle ?? currentProf.email.split("@")[0] ?? "");
+        setProfileUsername(
+          currentProf.handle ?? currentProf.email.split("@")[0] ?? "",
+        );
+        setDraftUsername(
+          currentProf.handle ?? currentProf.email.split("@")[0] ?? "",
+        );
         setProfileCourse(currentProf.course ?? "");
         setDraftCourse(currentProf.course ?? "");
         setProfileSemester(currentProf.semester ?? "");
@@ -444,7 +464,9 @@ setSavedPosts(formatted);
   const courseValue = draftCourse.replace(/[^a-zA-Z\s]/g, "").slice(0, 50);
   const semesterValue = draftSemester.replace(/\D/g, "").slice(0, 2);
 
-  const tabs = isOwnProfile ? ["Publicações", "Salvos", "Vagas"] : ["Publicações"];
+  const tabs = isOwnProfile
+    ? ["Publicações", "Salvos", "Vagas"]
+    : ["Publicações"];
 
   return (
     <div className="flex flex-col">
@@ -506,11 +528,24 @@ setSavedPosts(formatted);
           />
           <div className="grid flex-1 grid-cols-3 gap-2 text-center">
             {[
-              { n: stats.posts.toString(), l: "posts" },
-              { n: stats.followers.toString(), l: "seguidores" },
-              { n: stats.following.toString(), l: "seguindo" },
+              { n: stats.posts.toString(), l: "posts", tab: null },
+              { n: stats.followers.toString(), l: "seguidores", tab: "followers" },
+              { n: stats.following.toString(), l: "seguindo", tab: "following" },
             ].map((s) => (
-              <div key={s.l}>
+              <div
+                key={s.l}
+                className={s.tab ? "cursor-pointer" : ""}
+                onClick={() => {
+                  if (s.tab) {
+                    const targetId = isOwnProfile
+                      ? currentUser?.id
+                      : displayProfile?.user_id;
+                    if (targetId) {
+                      navigate(`/perfil/${targetId}/conexoes?tab=${s.tab}`);
+                    }
+                  }
+                }}
+              >
                 <p className="font-display text-lg font-semibold">{s.n}</p>
                 <p className="text-[11px] text-text-faint">{s.l}</p>
               </div>
@@ -523,14 +558,15 @@ setSavedPosts(formatted);
             <h2 className="font-display text-base font-semibold">
               {profileName}
             </h2>
-            {displayRole && (displayRole === "professor" || displayRole === "admin") && (
-              <span
-                className="grid h-4 w-4 place-items-center rounded-full bg-foreground text-background"
-                title="Verificado"
-              >
-                <ShieldCheck className="h-3 w-3" />
-              </span>
-            )}
+            {displayRole &&
+              (displayRole === "professor" || displayRole === "admin") && (
+                <span
+                  className="grid h-4 w-4 place-items-center rounded-full bg-foreground text-background"
+                  title="Verificado"
+                >
+                  <ShieldCheck className="h-3 w-3" />
+                </span>
+              )}
           </div>
           {displayRole && (
             <p className="mt-0.5 text-[11px] uppercase tracking-wider text-text-faint">
@@ -539,7 +575,9 @@ setSavedPosts(formatted);
           )}
           {(displayProfile.course || displayProfile.semester) && (
             <p className="mt-0.5 text-xs text-text-subtle">
-              {[displayProfile.course, displayProfile.semester].filter(Boolean).join(" · ")}
+              {[displayProfile.course, displayProfile.semester]
+                .filter(Boolean)
+                .join(" · ")}
             </p>
           )}
           {displayProfile.bio && (
@@ -558,7 +596,9 @@ setSavedPosts(formatted);
             <p className="text-[11px] uppercase tracking-wider text-text-faint">
               E-mail institucional
             </p>
-            <p className="truncate text-sm font-semibold">{displayProfile.email}</p>
+            <p className="truncate text-sm font-semibold">
+              {displayProfile.email}
+            </p>
           </div>
           {emailVerified ? (
             <span className="shrink-0 rounded-full bg-online/20 px-2 py-0.5 text-[10px] font-semibold text-online">
@@ -595,10 +635,14 @@ setSavedPosts(formatted);
                 "rounded-xl py-2.5 text-sm font-semibold transition-smooth",
                 isFollowing
                   ? "bg-secondary text-foreground hover:bg-accent"
-                  : "bg-foreground text-background hover:bg-foreground/90"
+                  : "bg-foreground text-background hover:bg-foreground/90",
               )}
             >
-              {followLoading ? "Processando..." : isFollowing ? "Seguindo" : "Seguir"}
+              {followLoading
+                ? "Processando..."
+                : isFollowing
+                  ? "Seguindo"
+                  : "Seguir"}
             </button>
             <button
               onClick={onBack}
@@ -614,12 +658,16 @@ setSavedPosts(formatted);
             <div className="rounded-2xl border border-hairline bg-gradient-card p-3.5">
               <GraduationCap className="h-5 w-5 text-text-subtle" />
               <p className="mt-2 text-[11px] text-text-faint">Curso</p>
-              <p className="text-sm font-semibold">{displayProfile.course || "—"}</p>
+              <p className="text-sm font-semibold">
+                {displayProfile.course || "—"}
+              </p>
             </div>
             <div className="rounded-2xl border border-hairline bg-gradient-card p-3.5">
               <BookOpen className="h-5 w-5 text-text-subtle" />
               <p className="mt-2 text-[11px] text-text-faint">Período</p>
-              <p className="text-sm font-semibold">{displayProfile.semester || "—"}</p>
+              <p className="text-sm font-semibold">
+                {displayProfile.semester || "—"}
+              </p>
             </div>
           </div>
         )}
@@ -627,7 +675,8 @@ setSavedPosts(formatted);
 
       <div className="mt-6 flex border-y border-hairline">
         {tabs.map((t) => {
-          const tabKey = t === "Publicações" ? "posts" : t === "Salvos" ? "saved" : "vagas";
+          const tabKey =
+            t === "Publicações" ? "posts" : t === "Salvos" ? "saved" : "vagas";
           const isActive = activeTab === tabKey;
           return (
             <button
@@ -637,7 +686,7 @@ setSavedPosts(formatted);
                 "flex-1 py-3 text-xs font-semibold transition-smooth",
                 isActive
                   ? "border-t-2 border-foreground -mt-px text-foreground"
-                  : "text-text-faint"
+                  : "text-text-faint",
               )}
             >
               {t}
@@ -674,7 +723,11 @@ setSavedPosts(formatted);
                             }
                           }}
                         >
-                          <Avatar name={p.author.display_name} size="md" />
+                          <Avatar
+                            name={p.author.display_name}
+                            url={p.author.avatar_url}
+                            size="md"
+                          />
                           <div>
                             <div className="flex items-center gap-1.5">
                               <p className="text-sm font-semibold leading-tight">
@@ -701,7 +754,9 @@ setSavedPosts(formatted);
                           <button
                             className="text-text-faint hover:text-foreground"
                             onClick={() =>
-                              setOpenPostMenu(openPostMenu === p.id ? null : p.id)
+                              setOpenPostMenu(
+                                openPostMenu === p.id ? null : p.id,
+                              )
                             }
                             aria-label="Mais opções"
                           >
@@ -826,7 +881,11 @@ setSavedPosts(formatted);
                             }
                           }}
                         >
-                          <Avatar name={p.author.display_name} size="md" />
+                          <Avatar
+                            name={p.author.display_name}
+                            url={p.author.avatar_url}
+                            size="md"
+                          />
                           <div>
                             <div className="flex items-center gap-1.5">
                               <p className="text-sm font-semibold leading-tight">
@@ -1006,7 +1065,9 @@ setSavedPosts(formatted);
                 }}
               />
             </div>
-            <p className="text-[11px] text-text-faint">Toque na câmera para trocar a foto</p>
+            <p className="text-[11px] text-text-faint">
+              Toque na câmera para trocar a foto
+            </p>
           </div>
 
           <label className="space-y-1">
@@ -1089,7 +1150,8 @@ setSavedPosts(formatted);
                 setUploadingAvatar(Boolean(avatarFile));
 
                 try {
-                  let newAvatarUrl: string | null = avatarUrl?.split("?")[0] ?? null;
+                  let newAvatarUrl: string | null =
+                    avatarUrl?.split("?")[0] ?? null;
 
                   if (avatarFile) {
                     if (!currentUser) {
@@ -1097,17 +1159,21 @@ setSavedPosts(formatted);
                       return;
                     }
 
-                    const ext = avatarFile.name.split(".").pop()?.toLowerCase() ?? "jpg";
+                    const ext =
+                      avatarFile.name.split(".").pop()?.toLowerCase() ?? "jpg";
                     const filePath = `${currentUser.id}/avatar-${Date.now()}.${ext}`;
-                    const { data: uploadData, error: uploadError } = await supabase.storage
-                      .from("avatars")
-                      .upload(filePath, avatarFile, {
-                        contentType: avatarFile.type,
-                        upsert: false,
-                      });
+                    const { data: uploadData, error: uploadError } =
+                      await supabase.storage
+                        .from("avatars")
+                        .upload(filePath, avatarFile, {
+                          contentType: avatarFile.type,
+                          upsert: false,
+                        });
 
                     if (uploadError) {
-                      toast.error("Erro ao enviar foto: " + uploadError.message);
+                      toast.error(
+                        "Erro ao enviar foto: " + uploadError.message,
+                      );
                       return;
                     }
 
@@ -1135,7 +1201,9 @@ setSavedPosts(formatted);
                   setProfileName(trimmed);
                   setProfileCourse(courseText);
                   setProfileSemester(semesterDigits);
-                  setAvatarUrl(newAvatarUrl ? `${newAvatarUrl}?t=${Date.now()}` : null);
+                  setAvatarUrl(
+                    newAvatarUrl ? `${newAvatarUrl}?t=${Date.now()}` : null,
+                  );
                   setAvatarFile(null);
                   setAvatarPreview(null);
                   setEditOpen(false);
